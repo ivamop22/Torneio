@@ -51,23 +51,23 @@ model Court {
 }
 
 model Tournament {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  clubId         String?   @map("club_id") @db.Uuid
-  name           String    @db.VarChar(180)
-  slug           String    @unique @db.VarChar(200)
-  level          String    @default("recreational") @db.VarChar(40)
-  status         String    @default("draft") @db.VarChar(20)
-  startDate      DateTime  @map("start_date") @db.Date
-  endDate        DateTime  @map("end_date") @db.Date
-  city           String?   @db.VarChar(120)
-  state          String?   @db.VarChar(120)
-  country        String?   @default("BR") @db.VarChar(120)
-  isOnline       Boolean   @default(false) @map("is_online")
-  organizerNotes String?   @map("organizer_notes")
-  createdById    String?   @map("created_by") @db.Uuid
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  club_id         String?   @db.Uuid
+  name            String    @db.VarChar(180)
+  slug            String    @unique @db.VarChar(200)
+  level           String    @default("recreational") @db.VarChar(40)
+  status          String    @default("draft") @db.VarChar(20)
+  startDate       DateTime  @map("start_date") @db.Date
+  endDate         DateTime  @map("end_date") @db.Date
+  city            String?   @db.VarChar(120)
+  state           String?   @db.VarChar(120)
+  country         String?   @default("BR") @db.VarChar(120)
+  is_online       Boolean   @default(false)
+  organizer_notes String?
+  created_by      String?   @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
 
   @@map("tournaments")
 }

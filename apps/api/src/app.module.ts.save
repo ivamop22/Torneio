@@ -1,0 +1,20 @@
+import { Module, Controller, Get } from '@nestjs/common';
+import { TournamentsController } from './tournaments/tournaments.controller';
+import { EventsController } from './events/events.controller';
+import { PlayersController } from './players/players.controller';@Controller()
+class AppController {
+  @Get()
+  health() {
+    return { ok: true };
+  }
+}
+
+@Module({
+  controllers: [
+    AppController,
+    TournamentsController,
+    EventsController,
+    PlayersController,
+  ],
+})
+export class AppModule {}

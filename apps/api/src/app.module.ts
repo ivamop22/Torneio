@@ -1,14 +1,19 @@
-import { Module, Controller, Get } from '@nestjs/common';
-
-@Controller()
-class AppController {
-  @Get()
-  health() {
-    return { ok: true, service: 'api', port: 3001 };
-  }
-}
+import { Module } from '@nestjs/common';
+import { TournamentsController } from './tournaments/tournaments.controller';
+import { EventsController } from './events/events.controller';
+import { PlayersController } from './players/players.controller';
+import { TeamsController } from './teams/teams.controller';
+import { MatchesController } from './matches/matches.controller';
+import { DrawsController } from './draws/draws.controller';
 
 @Module({
-  controllers: [AppController],
+  controllers: [
+    TournamentsController,
+    EventsController,
+    PlayersController,
+    TeamsController,
+    MatchesController,
+    DrawsController,
+  ],
 })
 export class AppModule {}
