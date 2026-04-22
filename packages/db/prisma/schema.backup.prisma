@@ -1,0 +1,456 @@
+enum UserRole {
+  admin
+  organizer
+  referee
+  player
+  viewer
+}
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+}
+
+enum TournamentLevel {
+  official
+  federated
+  recreational
+  training
+}
+
+enum TournamentStatus {
+  draft
+  published
+  open
+  ongoing
+  finished
+  cancelled
+}
+
+enum EventGender {
+  male
+  female
+  mixed
+  open
+}
+
+enum EventFormat {
+  double_fixed
+  double_rotating
+  group_stage
+  knockout
+  round_robin
+  group_knockout
+}
+
+enum EventStatus {
+  draft
+  open
+  closed
+  seeded
+  live
+  finished
+  cancelled
+}
+
+enum RegistrationStatus {
+  pending
+  waiting_list
+  accepted
+  alternate
+  wild_card
+  withdrawn
+  rejected
+  no_show
+  champion
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+  exempted
+}
+
+enum DrawType {
+  single_elimination
+  double_elimination
+  round_robin
+  group_knockout
+}
+
+enum DrawStatus {
+  pending
+  generated
+  published
+  locked
+  finished
+}
+
+enum MatchStatus {
+  scheduled
+  called
+  warmup
+  live
+  suspended
+  completed
+  walkover
+  cancelled
+}
+
+enum NotificationChannel {
+  email
+  whatsapp
+  push
+  sms
+}
+
+enum NotificationStatus {
+  pending
+  queued
+  sent
+  failed
+  cancelled
+}
+
+enum EligibilityStatus {
+  eligible
+  pending
+  suspended
+  blocked
+}generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+
+
+model User {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String      @db.VarChar(120)
+  email        String      @unique @db.VarChar(180)
+  passwordHash String      @map("password_hash")
+  role         UserRole
+  status       UserStatus  @default(active)
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime?   @map("deleted_at") @db.Timestamptz(6)
+
+  @@map("users")
+}
+
+model Club {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String    @db.VarChar(160)
+  city      String?   @db.VarChar(120)
+  state     String?   @db.VarChar(120)
+  country   String    @default("BR") @db.VarChar(120)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@map("clubs")
+}
+
+model Court {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clubId     String?   @map("club_id") @db.Uuid
+  name       String    @db.VarChar(80)
+  surface    String    @default("sand") @db.VarChar(50)
+  netHeightM Decimal?  @map("net_height_m") @db.Decimal(4, 2)
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@map("courts")
+}
+
+model Tournament {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clubId         String?          @map("club_id") @db.Uuid
+  name           String           @db.VarChar(180)
+  slug           String           @unique @db.VarChar(200)
+  level          TournamentLevel  @default(recreational)
+  status         TournamentStatus @default(draft)
+  startDate      DateTime         @map("start_date") @db.Date
+  endDate        DateTime         @map("end_date") @db.Date
+  city           String?          @db.VarChar(120)
+  state          String?          @db.VarChar(120)
+  country        String           @default("BR") @db.VarChar(120)
+  isOnline       Boolean          @default(false) @map("is_online")
+  organizerNotes String?          @map("organizer_notes")
+  createdById    String?          @map("created_by") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?        @map("deleted_at") @db.Timestamptz(6)
+
+  @@map("tournaments")
+}
+
+model TournamentRule {
+  id                               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tournamentId                     String   @unique @map("tournament_id") @db.Uuid
+  bestOfSets                       Int      @default(3) @map("best_of_sets") @db.SmallInt
+  gamesToWinSet                    Int      @default(6) @map("games_to_win_set") @db.SmallInt
+  gamesMargin                      Int      @default(2) @map("games_margin") @db.SmallInt
+  tieBreakAtGames                  Int      @default(6) @map("tie_break_at_games") @db.SmallInt
+  tieBreakPoints                   Int      @default(7) @map("tie_break_points") @db.SmallInt
+  finalSetMatchTiebreakPoints      Int      @default(10) @map("final_set_match_tiebreak_points") @db.SmallInt
+  noAd                             Boolean  @default(true) @map("no_ad")
+  allowMixed                       Boolean  @default(true) @map("allow_mixed")
+  allowSingles                     Boolean  @default(false) @map("allow_singles")
+  allowPartnerRotation             Boolean  @default(false) @map("allow_partner_rotation")
+  serviceReturnZoneMeters          Decimal  @default(3.0) @map("prohibit_service_return_zone_meters") @db.Decimal(3, 1)
+  warmupSeconds                    Int      @default(300) @map("warmup_seconds") @db.SmallInt
+  changeoverSeconds                Int      @default(90) @map("changeover_seconds") @db.SmallInt
+  setBreakSeconds                  Int      @default(120) @map("set_break_seconds") @db.SmallInt
+  classificationWinPoints          Int      @default(2) @map("classification_win_points")
+  classificationLossPoints         Int      @default(1) @map("classification_loss_points")
+  classificationWalkoverLossPoints Int      @default(0) @map("classification_walkover_loss_points")
+  tiebreakCriteria                 Json     @map("tiebreak_criteria")
+  createdAt                        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("tournament_rules")
+}
+
+model Event {
+  id                 String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tournamentId       String      @map("tournament_id") @db.Uuid
+  name               String      @db.VarChar(160)
+  gender             EventGender
+  format             EventFormat
+  category           String?     @db.VarChar(60)
+  level              String?     @db.VarChar(60)
+  maxPairs           Int?        @map("max_pairs")
+  minPairs           Int?        @map("min_pairs")
+  entryFee           Decimal     @default(0) @map("entry_fee") @db.Decimal(10, 2)
+  entryDeadline      DateTime?   @map("entry_deadline") @db.Timestamptz(6)
+  withdrawalDeadline DateTime?   @map("withdrawal_deadline") @db.Timestamptz(6)
+  checkInDeadline    DateTime?   @map("check_in_deadline") @db.Timestamptz(6)
+  status             EventStatus @default(draft)
+  rules              Json?
+  seedingCriteria    Json?       @map("seeding_criteria")
+  pairingMode        String?     @map("pairing_mode") @db.VarChar(40)
+  isOfficial         Boolean     @default(false) @map("is_official")
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?   @map("deleted_at") @db.Timestamptz(6)
+
+  @@map("events")
+}
+
+model Player {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName          String            @map("full_name") @db.VarChar(180)
+  birthDate         DateTime?         @map("birth_date") @db.Date
+  gender            String?           @db.VarChar(20)
+  nationality       String?           @db.VarChar(80)
+  phone             String?           @db.VarChar(30)
+  email             String?           @db.VarChar(180)
+  documentId        String?           @map("document_id") @db.VarChar(80)
+  ipin              String?           @db.VarChar(80)
+  rankingPoints     Int               @default(0) @map("ranking_points")
+  eligibilityStatus EligibilityStatus @default(eligible) @map("eligibility_status")
+  active            Boolean           @default(true)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime?         @map("deleted_at") @db.Timestamptz(6)
+
+  @@map("players")
+}
+
+model EventPlayer {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId     String             @map("event_id") @db.Uuid
+  playerId    String             @map("player_id") @db.Uuid
+  status      RegistrationStatus @default(pending)
+  seedRanking Int?               @map("seed_ranking")
+  checkInAt   DateTime?          @map("check_in_at") @db.Timestamptz(6)
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("event_players")
+}
+
+model Team {
+  id        String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId   String             @map("event_id") @db.Uuid
+  player1Id String             @map("player1_id") @db.Uuid
+  player2Id String?            @map("player2_id") @db.Uuid
+  seed      Int?
+  wildCard  Boolean            @default(false) @map("wild_card")
+  alternate Boolean            @default(false)
+  waitList  Boolean            @default(false) @map("wait_list")
+  status    RegistrationStatus @default(accepted)
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime?          @map("deleted_at") @db.Timestamptz(6)
+
+  @@map("teams")
+}
+
+model Registration {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId       String             @map("event_id") @db.Uuid
+  playerId      String?            @map("player_id") @db.Uuid
+  teamId        String?            @map("team_id") @db.Uuid
+  status        RegistrationStatus @default(pending)
+  paymentStatus PaymentStatus      @default(pending) @map("payment_status")
+  acceptedAt    DateTime?          @map("accepted_at") @db.Timestamptz(6)
+  withdrawnAt   DateTime?          @map("withdrawn_at") @db.Timestamptz(6)
+  notes         String?
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("registrations")
+}
+
+model Payment {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  registrationId String        @unique @map("registration_id") @db.Uuid
+  amount         Decimal       @db.Decimal(10, 2)
+  currency       String        @default("BRL") @db.VarChar(10)
+  provider       String?       @db.VarChar(60)
+  providerRef    String?       @map("provider_ref") @db.VarChar(120)
+  status         PaymentStatus @default(pending)
+  paidAt         DateTime?     @map("paid_at") @db.Timestamptz(6)
+  refundedAt     DateTime?     @map("refunded_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("payments")
+}
+
+model Draw {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId     String     @map("event_id") @db.Uuid
+  drawType    DrawType   @map("draw_type")
+  generatedBy String?    @map("generated_by") @db.Uuid
+  generatedAt DateTime?  @map("generated_at") @db.Timestamptz(6)
+  status      DrawStatus @default(pending)
+  metadata    Json?
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("draws")
+}
+
+model EventGroup {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId   String   @map("event_id") @db.Uuid
+  name      String   @db.VarChar(30)
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("event_groups")
+}
+
+model EventGroupStanding {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventGroupId String   @map("event_group_id") @db.Uuid
+  teamId       String   @map("team_id") @db.Uuid
+  played       Int      @default(0)
+  wins         Int      @default(0)
+  losses       Int      @default(0)
+  walkovers    Int      @default(0)
+  setsFor      Int      @default(0) @map("sets_for")
+  setsAgainst  Int      @default(0) @map("sets_against")
+  gamesFor     Int      @default(0) @map("games_for")
+  gamesAgainst Int      @default(0) @map("games_against")
+  points       Int      @default(0)
+  rankPosition Int?     @map("rank_position")
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("event_group_standings")
+}
+
+model Match {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId       String      @map("event_id") @db.Uuid
+  drawId        String?     @map("draw_id") @db.Uuid
+  groupId       String?     @map("group_id") @db.Uuid
+  courtId       String?     @map("court_id") @db.Uuid
+  roundName     String      @map("round_name") @db.VarChar(80)
+  matchNumber   Int?        @map("match_number")
+  team1Id       String?     @map("team1_id") @db.Uuid
+  team2Id       String?     @map("team2_id") @db.Uuid
+  scheduledAt   DateTime?   @map("scheduled_at") @db.Timestamptz(6)
+  calledAt      DateTime?   @map("called_at") @db.Timestamptz(6)
+  startedAt     DateTime?   @map("started_at") @db.Timestamptz(6)
+  finishedAt    DateTime?   @map("finished_at") @db.Timestamptz(6)
+  status        MatchStatus @default(scheduled)
+  winnerTeamId  String?     @map("winner_team_id") @db.Uuid
+  loserTeamId   String?     @map("loser_team_id") @db.Uuid
+  walkover      Boolean     @default(false)
+  noShow        Boolean     @default(false) @map("no_show")
+  retiredTeamId String?     @map("retired_team_id") @db.Uuid
+  notes         String?
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("matches")
+}
+
+model MatchSet {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  matchId         String   @map("match_id") @db.Uuid
+  setNumber       Int      @map("set_number") @db.SmallInt
+  team1Games      Int      @default(0) @map("team1_games") @db.SmallInt
+  team2Games      Int      @default(0) @map("team2_games") @db.SmallInt
+  tieBreakTeam1   Int?     @map("tie_break_team1") @db.SmallInt
+  tieBreakTeam2   Int?     @map("tie_break_team2") @db.SmallInt
+  isMatchTiebreak Boolean  @default(false) @map("is_match_tiebreak")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("match_sets")
+}
+
+model Ranking {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  playerId    String   @map("player_id") @db.Uuid
+  eventId     String?  @map("event_id") @db.Uuid
+  category    String?  @db.VarChar(60)
+  points      Int      @default(0)
+  rankingDate DateTime @default(now()) @map("ranking_date") @db.Date
+  source      String?  @db.VarChar(80)
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("rankings")
+}
+
+model Notification {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String?            @map("user_id") @db.Uuid
+  type        String             @db.VarChar(30)
+  channel     NotificationChannel
+  payload     Json
+  status      NotificationStatus @default(pending)
+  templateKey String?            @map("template_key") @db.VarChar(80)
+  sentAt      DateTime?          @map("sent_at") @db.Timestamptz(6)
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(120)
+  entityType  String   @map("entity_type") @db.VarChar(80)
+  entityId    String?  @map("entity_id") @db.Uuid
+  payload     Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("audit_logs")
+}
