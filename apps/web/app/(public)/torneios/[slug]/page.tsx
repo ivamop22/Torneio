@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, use } from 'react';
 import { TournamentBracket } from '../../../../components/TournamentBracket';
 import { GroupStandings } from '../../../../components/GroupStandings';
 
@@ -24,10 +24,11 @@ type BracketData = {
 };
 
 type PageProps = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export default function TournamentDetailPage({ params }: PageProps) {
+  const { slug } = use(params);
   const [bracket, setBracket] = useState<BracketData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -44,7 +45,7 @@ export default function TournamentDetailPage({ params }: PageProps) {
       try {
         const res = await fetch(`${API_URL}/tournaments`);
         const tournaments = await res.json();
-        const t = tournaments.find((t: any) => t.slug === params.slug);
+        const t = tournaments.find((t: any) => t.slug === slug);
         if (!t) { setError('Torneio não encontrado.'); setLoading(false); return; }
         setTournament(t);
 
@@ -58,7 +59,7 @@ export default function TournamentDetailPage({ params }: PageProps) {
       }
     }
     loadTournament();
-  }, [params.slug]);
+  }, [slug]);
 
   const loadBracket = useCallback(async () => {
     if (!eventId) return;
@@ -122,7 +123,7 @@ export default function TournamentDetailPage({ params }: PageProps) {
           </a>
           <div className="h-4 w-px bg-slate-700" />
           <span className="text-slate-200 font-semibold truncate">
-            {tournament?.name ?? params.slug}
+            {tournament?.name ?? slug}
           </span>
           {bracket?.event && (
             <span className={`ml-auto text-xs px-2.5 py-1 rounded-full border ${statusColors[bracket.event.status] ?? statusColors.draft}`}>
