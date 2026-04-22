@@ -5,6 +5,7 @@ import { PlayersController } from './players/players.controller';
 import { TeamsController } from './teams/teams.controller';
 import { MatchesController } from './matches/matches.controller';
 import { DrawsController } from './draws/draws.controller';
+import { DrawsService } from './draws/draws.service';
 
 @Module({
   controllers: [
@@ -15,5 +16,7 @@ import { DrawsController } from './draws/draws.controller';
     MatchesController,
     DrawsController,
   ],
+  providers: [DrawsService],
+  exports: [DrawsService],
 })
 export class AppModule {}

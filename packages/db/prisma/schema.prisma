@@ -122,6 +122,10 @@ model Event {
   updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt          DateTime? @map("deleted_at") @db.Timestamptz(6)
 
+  // Relations
+  teams  Team[]
+  groups EventGroup[]
+
   @@index([tournamentId, status], map: "idx_events_tournament_status")
   @@map("events")
 }
@@ -142,6 +146,10 @@ model Player {
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt         DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // Relations
+  teamsAsPlayer1 Team[] @relation("TeamPlayer1")
+  teamsAsPlayer2 Team[] @relation("TeamPlayer2")
 
   @@index([eligibilityStatus], map: "idx_players_eligibility_status")
   @@map("players")
@@ -174,6 +182,13 @@ model Team {
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // Relations
+  event        Event   @relation(fields: [eventId], references: [id])
+  player1      Player  @relation("TeamPlayer1", fields: [player1Id], references: [id])
+  player2      Player? @relation("TeamPlayer2", fields: [player2Id], references: [id])
+  matchesTeam1 Match[] @relation("MatchTeam1")
+  matchesTeam2 Match[] @relation("MatchTeam2")
 
   @@unique([eventId, player1Id, player2Id])
   @@index([eventId, status], map: "idx_teams_event_status")
@@ -234,6 +249,11 @@ model EventGroup {
   position  Int
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  // Relations
+  event     Event                @relation(fields: [eventId], references: [id])
+  standings EventGroupStanding[]
+  matches   Match[]
+
   @@unique([eventId, name])
   @@map("event_groups")
 }
@@ -253,6 +273,9 @@ model EventGroupStanding {
   points       Int      @default(0)
   rankPosition Int?     @map("rank_position")
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  eventGroup EventGroup @relation(fields: [eventGroupId], references: [id])
 
   @@unique([eventGroupId, teamId])
   @@map("event_group_standings")
@@ -282,6 +305,12 @@ model Match {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  // Relations
+  team1 Team?   @relation("MatchTeam1", fields: [team1Id], references: [id])
+  team2 Team?   @relation("MatchTeam2", fields: [team2Id], references: [id])
+  group EventGroup? @relation(fields: [groupId], references: [id])
+  sets  MatchSet[]
+
   @@index([courtId, scheduledAt], map: "idx_matches_court_time")
   @@index([eventId, status], map: "idx_matches_event_status")
   @@map("matches")
@@ -298,6 +327,9 @@ model MatchSet {
   isMatchTiebreak Boolean  @default(false) @map("is_match_tiebreak")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
   @@unique([matchId, setNumber])
   @@index([matchId], map: "idx_match_sets_match")
