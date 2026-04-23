@@ -36,6 +36,7 @@ COPY --from=base /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=base /app/packages/db ./packages/db
 COPY --from=base /app/apps/api/dist ./apps/api/dist
 COPY --from=base /app/apps/api/package.json ./apps/api/package.json
+COPY --from=base /app/apps/api/node_modules ./apps/api/node_modules
 
 EXPOSE 3001
 
