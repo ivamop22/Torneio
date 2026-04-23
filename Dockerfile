@@ -26,6 +26,9 @@ RUN cd apps/api && npx nest build
 FROM node:20-alpine AS production
 WORKDIR /app
 
+# OpenSSL is required by Prisma's query engine on Alpine
+RUN apk add --no-cache openssl
+
 # Copy built artifacts and node_modules from build stage
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/package.json ./package.json
