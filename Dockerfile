@@ -40,4 +40,4 @@ COPY --from=base /app/apps/api/package.json ./apps/api/package.json
 EXPOSE 3001
 
 WORKDIR /app/apps/api
-CMD ["sh", "-c", "cd /app/packages/db && (npx prisma migrate deploy || echo 'Migration warning: skipping and starting API'); node /app/apps/api/dist/main.js"]
+CMD ["node", "dist/main.js"]
