@@ -3,8 +3,10 @@
   "private": true,
   "packageManager": "pnpm@10.0.0",
   "scripts": {
-    "dev": "echo 'Configure workspaces and run apps individually'",
-    "build": "echo 'Build monorepo'"
+    "dev": "pnpm -r --parallel --filter api --filter web dev",
+    "build": "pnpm -r --filter api --filter web build",
+    "setup:db": "pnpm --filter @beach-tennis/db generate && pnpm --filter @beach-tennis/db migrate",
+    "test:smoke": "pnpm --filter api build && pnpm --filter web build"
   },
   "dependencies": {
     "@prisma/client": "5.22.0",

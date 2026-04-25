@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { prisma } from '../lib/prisma';
 
 @Controller('tournaments')
@@ -6,6 +14,7 @@ export class TournamentsController {
   @Get()
   async findAll() {
     return prisma.tournament.findMany({
+      where: { deleted_at: null },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -26,6 +35,22 @@ export class TournamentsController {
         state: body.state,
         country: body.country ?? 'BR',
       },
+    });
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    const existing = await prisma.tournament.findFirst({
+      where: { id, deleted_at: null },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Torneio não encontrado');
+    }
+
+    return prisma.tournament.update({
+      where: { id },
+      data: { deleted_at: new Date() },
     });
   }
 }

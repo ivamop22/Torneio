@@ -9,6 +9,7 @@ type Tournament = { id: string; name: string; slug: string; status: string; city
 type EventItem  = { id: string; tournamentId: string; name: string; gender: string; format: string; category?: string | null; status: string };
 type Player     = { id: string; fullName: string; gender?: string | null; email?: string | null; rankingPoints: number };
 type Team       = { id: string; seed?: number | null; status: string; player1?: { id: string; fullName: string } | null; player2?: { id: string; fullName: string } | null };
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 // ─── Estados brasileiros ──────────────────────────────────────────────────────
 const ESTADOS_BR = [
@@ -77,6 +78,7 @@ export default function AdminPage() {
   const [pCity,   setPCity]   = useState('');
   const [pCidades, setPCidades] = useState<string[]>([]);
   const [pCidadesLoading, setPCidadesLoading] = useState(false);
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
 
   // Dupla / chaveamento form
   const [teamEventId, setTeamEventId] = useState('');
@@ -141,24 +143,26 @@ export default function AdminPage() {
       .finally(() => setPCidadesLoading(false));
   }, [pState]);
 
-  async function post(url: string, body: any) {
+  async function apiRequest(url: string, method: HttpMethod, body?: any) {
     const r = await fetch(`${API_URL}${url}`, {
-      method: 'POST',
+      method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: body ? JSON.stringify(body) : undefined,
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
       throw new Error(err.message || `HTTP ${r.status}`);
     }
-    return r.json();
+    if (r.status === 204) return null;
+    const text = await r.text();
+    return text ? JSON.parse(text) : null;
   }
 
   async function handleTournament(e: FormEvent) {
     e.preventDefault();
     try {
       const slug = tName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-') + '-' + Date.now();
-      await post('/tournaments', { name: tName, slug, city: tCity || undefined, state: tState || undefined, startDate: tStart, endDate: tEnd });
+      await apiRequest('/tournaments', 'POST', { name: tName, slug, city: tCity || undefined, state: tState || undefined, startDate: tStart, endDate: tEnd });
       setTName(''); setTCity(''); setTState(''); setTStart(''); setTEnd('');
       showMsg('✅ Torneio criado com sucesso!'); loadAll();
     } catch (err: any) {
@@ -169,9 +173,19 @@ export default function AdminPage() {
   async function handleEvent(e: FormEvent) {
     e.preventDefault();
     try {
-      await post('/events', { tournamentId: evTournamentId, name: evName, gender: evGender, format: evFormat, category: evCategory || undefined, maxPairs: evMaxPairs ? Number(evMaxPairs) : undefined });
+      await apiRequest('/events', 'POST', { tournamentId: evTournamentId, name: evName, gender: evGender, format: evFormat, category: evCategory || undefined, maxPairs: evMaxPairs ? Number(evMaxPairs) : undefined });
       setEvName(''); setEvCategory(''); setEvMaxPairs('');
       showMsg('✅ Evento criado!'); loadAll();
+    } catch (err: any) {
+      showMsg(`❌ Erro: ${err.message}`, 'err');
+    }
+  }
+
+  async function handleDeleteTournament(tournamentId: string) {
+    try {
+      await apiRequest(`/tournaments/${tournamentId}`, 'DELETE');
+      showMsg('✅ Torneio excluído com sucesso!');
+      loadAll();
     } catch (err: any) {
       showMsg(`❌ Erro: ${err.message}`, 'err');
     }
@@ -180,9 +194,41 @@ export default function AdminPage() {
   async function handlePlayer(e: FormEvent) {
     e.preventDefault();
     try {
-      await post('/players', { fullName: pName, gender: pGender || undefined, email: pEmail || undefined, nationality: pNat || undefined });
+      const payload = { fullName: pName, gender: pGender || undefined, email: pEmail || undefined, nationality: pNat || undefined };
+      if (editingPlayerId) {
+        await apiRequest(`/players/${editingPlayerId}`, 'PUT', payload);
+      } else {
+        await apiRequest('/players', 'POST', payload);
+      }
       setPName(''); setPGender(''); setPEmail(''); setPNat('BR'); setPState(''); setPCity('');
-      showMsg('✅ Jogador cadastrado!'); loadAll();
+      setEditingPlayerId(null);
+      showMsg(editingPlayerId ? '✅ Jogador atualizado!' : '✅ Jogador cadastrado!');
+      loadAll();
+    } catch (err: any) {
+      showMsg(`❌ Erro: ${err.message}`, 'err');
+    }
+  }
+
+  function handleEditPlayer(player: Player) {
+    setEditingPlayerId(player.id);
+    setPName(player.fullName ?? '');
+    setPGender(player.gender ?? '');
+    setPEmail(player.email ?? '');
+    setPNat('BR');
+    setPState('');
+    setPCity('');
+    setTab('jogadores');
+  }
+
+  async function handleDeletePlayer(playerId: string) {
+    try {
+      await apiRequest(`/players/${playerId}`, 'DELETE');
+      if (editingPlayerId === playerId) {
+        setEditingPlayerId(null);
+        setPName(''); setPGender(''); setPEmail(''); setPNat('BR'); setPState(''); setPCity('');
+      }
+      showMsg('✅ Jogador removido com sucesso!');
+      loadAll();
     } catch (err: any) {
       showMsg(`❌ Erro: ${err.message}`, 'err');
     }
@@ -191,7 +237,7 @@ export default function AdminPage() {
   async function handleTeam(e: FormEvent) {
     e.preventDefault();
     try {
-      await post('/teams', { eventId: teamEventId, player1Id: p1Id, player2Id: p2Id, seed: tSeed ? Number(tSeed) : undefined });
+      await apiRequest('/teams', 'POST', { eventId: teamEventId, player1Id: p1Id, player2Id: p2Id, seed: tSeed ? Number(tSeed) : undefined });
       setP1Id(''); setP2Id(''); setTSeed('');
       showMsg('✅ Dupla criada!'); loadAll();
     } catch (err: any) {
@@ -202,7 +248,7 @@ export default function AdminPage() {
   async function handleDraw(e: FormEvent) {
     e.preventDefault();
     try {
-      await post('/draws/generate-group-knockout', { eventId: drawEventId, groupCount: Number(groupCount) });
+      await apiRequest('/draws/generate-group-knockout', 'POST', { eventId: drawEventId, groupCount: Number(groupCount) });
       showMsg('🎯 Chaveamento gerado!'); loadAll();
       const ev = events.find(ev => ev.id === drawEventId);
       const t  = tournaments.find(t => t.id === ev?.tournamentId);
@@ -359,7 +405,16 @@ export default function AdminPage() {
                               {t.city ? `${t.city}${t.state ? ` – ${t.state}` : ''}` : t.state ?? '—'} • {t.startDate?.slice(0,10)}
                             </div>
                           </div>
-                          <a href={`/torneios/${t.slug}`} target="_blank" className="text-xs text-green-400 hover:text-green-300 shrink-0">Ver →</a>
+                          <div className="flex items-center gap-3">
+                            <a href={`/torneios/${t.slug}`} target="_blank" className="text-xs text-green-400 hover:text-green-300 shrink-0">Ver →</a>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTournament(t.id)}
+                              className="text-xs text-red-400 hover:text-red-300 shrink-0 font-medium"
+                            >
+                              Excluir
+                            </button>
+                          </div>
                         </div>
                       ))}
                       {tournaments.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum torneio ainda.</div>}
@@ -440,7 +495,7 @@ export default function AdminPage() {
             {tab === 'jogadores' && (
               <div className="space-y-4">
                 <div className="bg-slate-900 border border-slate-700/60 rounded-xl p-5">
-                  <h2 className="font-bold text-slate-200 mb-4">Cadastrar Jogador</h2>
+                  <h2 className="font-bold text-slate-200 mb-4">{editingPlayerId ? 'Editar Jogador' : 'Cadastrar Jogador'}</h2>
                   <form onSubmit={handlePlayer} className="space-y-3">
                     <div>
                       <label className={label}>Nome completo *</label>
@@ -489,7 +544,23 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    <button className={btn} type="submit">Cadastrar Jogador</button>
+                    <div className="flex items-center gap-2">
+                      <button className={btn} type="submit">
+                        {editingPlayerId ? 'Salvar Alterações' : 'Cadastrar Jogador'}
+                      </button>
+                      {editingPlayerId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPlayerId(null);
+                            setPName(''); setPGender(''); setPEmail(''); setPNat('BR'); setPState(''); setPCity('');
+                          }}
+                          className="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
                   </form>
                 </div>
 
@@ -499,12 +570,28 @@ export default function AdminPage() {
                   </div>
                   <div className="divide-y divide-slate-800 max-h-80 overflow-y-auto">
                     {players.map(p => (
-                      <div key={p.id} className="px-5 py-2.5 flex items-center justify-between">
+                      <div key={p.id} className="px-5 py-2.5 flex items-center justify-between gap-4">
                         <div>
                           <div className="font-medium text-slate-200 text-sm">{p.fullName}</div>
                           <div className="text-xs text-slate-500">{p.gender ?? '—'} • {p.email ?? '—'}</div>
                         </div>
-                        <div className="text-xs text-yellow-400 font-bold">{p.rankingPoints} pts</div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-xs text-yellow-400 font-bold whitespace-nowrap">{p.rankingPoints} pts</div>
+                          <button
+                            type="button"
+                            onClick={() => handleEditPlayer(p)}
+                            className="text-xs text-blue-400 hover:text-blue-300 font-medium"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePlayer(p.id)}
+                            className="text-xs text-red-400 hover:text-red-300 font-medium"
+                          >
+                            Excluir
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {players.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum jogador ainda.</div>}
