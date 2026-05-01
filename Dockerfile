@@ -46,9 +46,5 @@ RUN cd packages/db && npx prisma generate
 
 EXPOSE 3001
 
-# Entrypoint: push schema then start API
-COPY --from=base /app/packages/db/prisma ./packages/db/prisma
-RUN printf '#!/bin/sh\nset -e\necho "Running prisma db push..."\ncd /app/packages/db && npx prisma db push --skip-generate --accept-data-loss 2>&1 || echo "DB push failed (non-fatal)"\necho "Starting API..."\nexec node /app/apps/api/dist/main.js\n' > /app/start.sh && chmod +x /app/start.sh
-
 WORKDIR /app/apps/api
-CMD ["/bin/sh", "/app/start.sh"]
+CMD ["node", "/app/apps/api/dist/main.js"]
