@@ -7,7 +7,7 @@
     "build": "pnpm -r --filter api --filter web build",
     "setup:db": "pnpm --filter @beach-tennis/db generate && pnpm --filter @beach-tennis/db migrate",
     "test:smoke": "pnpm --filter api build && pnpm --filter web build",
-    "simulate:tournament": "pnpm --filter api simulate:tournament"
+    "simulate:tournament": "pnpm --filter @beach-tennis/db generate && pnpm --filter api simulate:tournament"
   },
   "dependencies": {
     "@prisma/client": "5.22.0",
