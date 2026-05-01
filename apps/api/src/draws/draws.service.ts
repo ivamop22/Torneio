@@ -8,18 +8,24 @@ function getRoundName(totalRounds: number, roundIndex: number): string {
   return ROUND_NAMES[stepsFromEnd] ?? `Round ${roundIndex + 1}`;
 }
 
-function buildBracketRounds(n: number): number[] {
+function isPowerOfTwo(value: number): boolean {
+  return value >= 2 && (value & (value - 1)) === 0;
+}
+
+function buildBracketRounds(teamCount: number): number[] {
   const rounds: number[] = [];
-  let current = n;
-  while (current >= 1) {
-    rounds.push(current);
-    current = Math.floor(current / 2);
+  let matchesInRound = teamCount / 2;
+
+  while (matchesInRound >= 1) {
+    rounds.push(matchesInRound);
+    matchesInRound = Math.floor(matchesInRound / 2);
   }
+
   return rounds;
 }
 
 function crossBracketSeed(teams: string[], groupCount: number, advancePerGroup: number): string[] {
-  // 2 grupos, 2 avançam → SF1: G1#1 vs G2#2 | SF2: G2#1 vs G1#2
+  // 2 grupos, 2 avancam -> SF1: G1#1 vs G2#2 | SF2: G2#1 vs G1#2
   if (groupCount === 2 && advancePerGroup === 2 && teams.length === 4) {
     return [teams[0], teams[3], teams[1], teams[2]];
   }
@@ -38,9 +44,6 @@ function teamLabel(team: any): string {
 
 @Injectable()
 export class DrawsService {
-  // ─────────────────────────────────────────────────
-  // GERAR CHAVEAMENTO GRUPOS + MATA-MATA
-  // ─────────────────────────────────────────────────
   async generateGroupKnockout(eventId: string, groupCount = 2) {
     const teams = await prisma.team.findMany({
       where: { eventId, status: 'accepted', deletedAt: null },
@@ -49,10 +52,9 @@ export class DrawsService {
     });
 
     if (teams.length < groupCount * 2) {
-      throw new BadRequestException(`Mínimo ${groupCount * 2} duplas necessárias para ${groupCount} grupos.`);
+      throw new BadRequestException(`Minimo ${groupCount * 2} duplas necessarias para ${groupCount} grupos.`);
     }
 
-    // Limpar chaveamentos anteriores
     await prisma.match.deleteMany({ where: { eventId } });
     await prisma.eventGroupStanding.deleteMany({
       where: { eventGroup: { eventId } },
@@ -60,7 +62,6 @@ export class DrawsService {
     await prisma.eventGroup.deleteMany({ where: { eventId } });
     await prisma.draw.deleteMany({ where: { eventId } });
 
-    // Criar registro do chaveamento
     const draw = await prisma.draw.create({
       data: {
         eventId,
@@ -71,7 +72,6 @@ export class DrawsService {
       },
     });
 
-    // Distribuição serpentina dos times nos grupos
     const groups: typeof teams[] = Array.from({ length: groupCount }, () => []);
     teams.forEach((team, i) => {
       const row = Math.floor(i / groupCount);
@@ -82,20 +82,18 @@ export class DrawsService {
     const createdGroups: any[] = [];
 
     for (let g = 0; g < groupCount; g++) {
-      const groupName = String.fromCharCode(65 + g); // A, B, C...
+      const groupName = String.fromCharCode(65 + g);
 
       const group = await prisma.eventGroup.create({
         data: { eventId, name: `Grupo ${groupName}`, position: g + 1 },
       });
 
-      // Standings iniciais
       for (const team of groups[g]) {
         await prisma.eventGroupStanding.create({
           data: { eventGroupId: group.id, teamId: team.id },
         });
       }
 
-      // Partidas round-robin no grupo
       let matchNum = 1;
       const groupTeams = groups[g];
       for (let i = 0; i < groupTeams.length; i++) {
@@ -118,7 +116,6 @@ export class DrawsService {
       createdGroups.push({ group, teams: groupTeams });
     }
 
-    // Atualizar status do evento
     await prisma.event.update({
       where: { id: eventId },
       data: { status: 'live' },
@@ -127,9 +124,6 @@ export class DrawsService {
     return { draw, groups: createdGroups };
   }
 
-  // ─────────────────────────────────────────────────
-  // RECALCULAR CLASSIFICAÇÃO DO GRUPO
-  // ─────────────────────────────────────────────────
   async recalculateStandings(groupId: string) {
     const standings = await prisma.eventGroupStanding.findMany({
       where: { eventGroupId: groupId },
@@ -140,19 +134,22 @@ export class DrawsService {
       include: { sets: true },
     });
 
-    // Resetar
     const stats: Record<string, any> = {};
     for (const s of standings) {
       stats[s.teamId] = {
         id: s.id,
-        played: 0, wins: 0, losses: 0, walkovers: 0,
-        setsFor: 0, setsAgainst: 0,
-        gamesFor: 0, gamesAgainst: 0,
+        played: 0,
+        wins: 0,
+        losses: 0,
+        walkovers: 0,
+        setsFor: 0,
+        setsAgainst: 0,
+        gamesFor: 0,
+        gamesAgainst: 0,
         points: 0,
       };
     }
 
-    // Acumular stats
     for (const match of matches) {
       if (!match.team1Id || !match.team2Id || !match.winnerTeamId) continue;
       const t1 = match.team1Id;
@@ -177,44 +174,55 @@ export class DrawsService {
         stats[loser].points += 1;
       }
 
-      // Sets e games
-      let t1Sets = 0; let t2Sets = 0;
+      let t1Sets = 0;
+      let t2Sets = 0;
       for (const set of match.sets) {
-        const g1 = set.team1Games; const g2 = set.team2Games;
-        if (g1 > g2) t1Sets++; else t2Sets++;
+        const g1 = set.team1Games;
+        const g2 = set.team2Games;
+        if (g1 > g2) t1Sets++;
+        else t2Sets++;
         stats[t1].gamesFor += g1;
         stats[t1].gamesAgainst += g2;
         stats[t2].gamesFor += g2;
         stats[t2].gamesAgainst += g1;
       }
-      stats[t1].setsFor += t1Sets; stats[t1].setsAgainst += t2Sets;
-      stats[t2].setsFor += t2Sets; stats[t2].setsAgainst += t1Sets;
+      stats[t1].setsFor += t1Sets;
+      stats[t1].setsAgainst += t2Sets;
+      stats[t2].setsFor += t2Sets;
+      stats[t2].setsAgainst += t1Sets;
     }
 
-    // Ordenar: pontos → saldo sets → saldo games → games marcados
     const sorted = standings
       .filter((s) => stats[s.teamId])
       .sort((a, b) => {
-        const sa = stats[a.teamId]; const sb = stats[b.teamId];
+        const sa = stats[a.teamId];
+        const sb = stats[b.teamId];
         if (sb.points !== sa.points) return sb.points - sa.points;
-        const sdA = sa.setsFor - sa.setsAgainst; const sdB = sb.setsFor - sb.setsAgainst;
+        const sdA = sa.setsFor - sa.setsAgainst;
+        const sdB = sb.setsFor - sb.setsAgainst;
         if (sdB !== sdA) return sdB - sdA;
-        const gdA = sa.gamesFor - sa.gamesAgainst; const gdB = sb.gamesFor - sb.gamesAgainst;
+        const gdA = sa.gamesFor - sa.gamesAgainst;
+        const gdB = sb.gamesFor - sb.gamesAgainst;
         if (gdB !== gdA) return gdB - gdA;
         return sb.gamesFor - sa.gamesFor;
       });
 
-    // Salvar no banco
     for (let i = 0; i < sorted.length; i++) {
       const s = sorted[i];
       const st = stats[s.teamId];
       await prisma.eventGroupStanding.update({
         where: { id: s.id },
         data: {
-          played: st.played, wins: st.wins, losses: st.losses,
-          walkovers: st.walkovers, setsFor: st.setsFor, setsAgainst: st.setsAgainst,
-          gamesFor: st.gamesFor, gamesAgainst: st.gamesAgainst,
-          points: st.points, rankPosition: i + 1,
+          played: st.played,
+          wins: st.wins,
+          losses: st.losses,
+          walkovers: st.walkovers,
+          setsFor: st.setsFor,
+          setsAgainst: st.setsAgainst,
+          gamesFor: st.gamesFor,
+          gamesAgainst: st.gamesAgainst,
+          points: st.points,
+          rankPosition: i + 1,
         },
       });
     }
@@ -222,9 +230,6 @@ export class DrawsService {
     return sorted.map((s, i) => ({ ...stats[s.teamId], teamId: s.teamId, rankPosition: i + 1 }));
   }
 
-  // ─────────────────────────────────────────────────
-  // GERAR MATA-MATA A PARTIR DAS CLASSIFICAÇÕES
-  // ─────────────────────────────────────────────────
   async generateKnockout(eventId: string, advancePerGroup = 2) {
     const groups = await prisma.eventGroup.findMany({
       where: { eventId },
@@ -238,17 +243,15 @@ export class DrawsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Coletar times classificados de cada grupo
     const teamsByGroup: string[][] = [];
     for (const group of groups) {
       const standings = await prisma.eventGroupStanding.findMany({
         where: { eventGroupId: group.id },
-        orderBy: { rankPosition: 'asc' },
+        orderBy: [{ rankPosition: 'asc' }, { points: 'desc' }],
       });
       teamsByGroup.push(standings.slice(0, advancePerGroup).map((s) => s.teamId));
     }
 
-    // Intercalar grupos: [G1-1, G2-1, G1-2, G2-2, ...]
     const advancingTeams: string[] = [];
     for (let pos = 0; pos < advancePerGroup; pos++) {
       for (const groupTeams of teamsByGroup) {
@@ -257,6 +260,12 @@ export class DrawsService {
     }
 
     const n = advancingTeams.length;
+    if (!isPowerOfTwo(n)) {
+      throw new BadRequestException(
+        `O mata-mata precisa de 2, 4, 8 ou 16 classificados. Foram encontrados ${n}. Ajuste a quantidade de grupos/classificados.`,
+      );
+    }
+
     const rounds = buildBracketRounds(n);
     const seededTeams = crossBracketSeed(advancingTeams, groups.length, advancePerGroup);
 
@@ -289,27 +298,21 @@ export class DrawsService {
     return createdMatches;
   }
 
-  // ─────────────────────────────────────────────────
-  // AUTO-AVANÇAR VENCEDOR NO MATA-MATA
-  // ─────────────────────────────────────────────────
   async autoAdvanceWinner(matchId: string) {
     const match = await prisma.match.findUnique({ where: { id: matchId } });
     if (!match || !match.winnerTeamId) return;
 
-    // Fase de grupos → recalcular standings + verificar se todos terminaram
     if (match.groupId) {
       await this.recalculateStandings(match.groupId);
       await this.checkAndGenerateKnockout(match.eventId);
       return;
     }
 
-    // Mata-mata → avançar vencedor para a próxima partida
     const allKnockout = await prisma.match.findMany({
       where: { eventId: match.eventId, groupId: null },
       orderBy: { matchNumber: 'asc' },
     });
 
-    // Agrupar por round
     const roundMap = new Map<string, typeof allKnockout>();
     for (const m of allKnockout) {
       if (!roundMap.has(m.roundName)) roundMap.set(m.roundName, []);
@@ -323,7 +326,6 @@ export class DrawsService {
 
     if (currentRoundIdx === -1) return;
 
-    // É a final → detectar campeão
     if (currentRoundIdx === roundNames.length - 1) {
       await this.detectChampion(match.eventId, match.winnerTeamId);
       return;
@@ -334,7 +336,7 @@ export class DrawsService {
 
     const posInRound = currentRoundMatches.findIndex((m) => m.id === matchId);
     const nextMatchIdx = Math.floor(posInRound / 2);
-    const slot = posInRound % 2; // 0 = team1, 1 = team2
+    const slot = posInRound % 2;
 
     if (nextMatchIdx >= nextRoundMatches.length) return;
 
@@ -347,31 +349,23 @@ export class DrawsService {
     });
   }
 
-  // ─────────────────────────────────────────────────
-  // VERIFICAR SE FASE DE GRUPOS TERMINOU → GERAR MATA-MATA
-  // ─────────────────────────────────────────────────
   private async checkAndGenerateKnockout(eventId: string) {
     const groups = await prisma.eventGroup.findMany({ where: { eventId } });
     for (const g of groups) {
       const pending = await prisma.match.count({
         where: { groupId: g.id, status: { not: 'completed' } },
       });
-      if (pending > 0) return; // Ainda há partidas pendentes
+      if (pending > 0) return;
     }
 
-    // Verificar se knockout já existe
     const knockoutExists = await prisma.match.count({
       where: { eventId, groupId: null },
     });
     if (knockoutExists > 0) return;
 
-    // Gerar mata-mata automaticamente!
     await this.generateKnockout(eventId, 2);
   }
 
-  // ─────────────────────────────────────────────────
-  // DETECTAR CAMPEÃO + ATUALIZAR RANKING
-  // ─────────────────────────────────────────────────
   async detectChampion(eventId: string, winnerTeamId: string) {
     await prisma.event.update({
       where: { id: eventId },
@@ -382,7 +376,7 @@ export class DrawsService {
     if (!team) return;
 
     const playerIds = [team.player1Id, team.player2Id].filter(Boolean) as string[];
-    const rankingPoints = { 1: 1000, 2: 750, 3: 500 };
+    const rankingPoints = { 1: 1000, 2: 750 };
 
     for (const playerId of playerIds) {
       await prisma.ranking.create({
@@ -402,7 +396,6 @@ export class DrawsService {
       });
     }
 
-    // Pontos para finalistas (vice)
     const finalMatch = await prisma.match.findFirst({
       where: { eventId, roundName: 'Final', status: 'completed' },
     });
@@ -428,9 +421,6 @@ export class DrawsService {
     }
   }
 
-  // ─────────────────────────────────────────────────
-  // DADOS COMPLETOS PARA VISUAL DO BRACKET
-  // ─────────────────────────────────────────────────
   async getBracketData(eventId: string) {
     const [event, groups, knockoutMatches] = await Promise.all([
       prisma.event.findUnique({ where: { id: eventId } }),
@@ -441,9 +431,8 @@ export class DrawsService {
       }),
     ]);
 
-    if (!event) throw new NotFoundException('Evento não encontrado.');
+    if (!event) throw new NotFoundException('Evento nao encontrado.');
 
-    // Função helper para buscar time com jogadores
     const enrichTeam = async (teamId: string | null) => {
       if (!teamId) return null;
       const team = await prisma.team.findUnique({
@@ -453,7 +442,6 @@ export class DrawsService {
       return team ? { ...team, label: teamLabel(team) } : null;
     };
 
-    // Grupos com standings e partidas
     const groupsWithData = await Promise.all(
       groups.map(async (group) => {
         const [standings, matches] = await Promise.all([
@@ -491,7 +479,6 @@ export class DrawsService {
       }),
     );
 
-    // Mata-mata agrupado por rodada
     const knockoutWithTeams = await Promise.all(
       knockoutMatches.map(async (m) => ({
         ...m,
@@ -511,7 +498,6 @@ export class DrawsService {
       knockoutByRound[m.roundName].push(m);
     }
 
-    // Campeão = vencedor da Final
     const finalMatch = knockoutWithTeams.find((m) => m.roundName === 'Final' && m.status === 'completed');
     const champion = finalMatch?.winner ?? null;
 
@@ -528,7 +514,6 @@ export class DrawsService {
     };
   }
 
-  // Ranking geral
   async getRanking(category?: string) {
     const players = await prisma.player.findMany({
       where: { active: true, deletedAt: null },
