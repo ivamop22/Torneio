@@ -1,5 +1,49 @@
-import { prisma } from '../src/lib/prisma';
-import { DrawsService } from '../src/draws/draws.service';
+import * as fs from 'fs';
+import * as path from 'path';
+
+function loadEnvFile(filePath: string) {
+  if (!fs.existsSync(filePath)) return;
+
+  const content = fs.readFileSync(filePath, 'utf8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const separator = trimmed.indexOf('=');
+    if (separator === -1) continue;
+
+    const key = trimmed.slice(0, separator).trim();
+    const rawValue = trimmed.slice(separator + 1).trim();
+    const value = rawValue.replace(/^['"]|['"]$/g, '');
+
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+const repoRoot = path.resolve(__dirname, '../../..');
+loadEnvFile(path.join(repoRoot, '.env'));
+loadEnvFile(path.join(repoRoot, 'apps/api/.env'));
+loadEnvFile(path.join(repoRoot, 'packages/db/.env'));
+
+if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {
+  process.env.DIRECT_URL = process.env.DATABASE_URL;
+}
+
+if (!process.env.DATABASE_URL) {
+  console.error([
+    'DATABASE_URL nao encontrada.',
+    'Crie um arquivo .env na raiz do projeto, em apps/api/.env ou em packages/db/.env com:',
+    'DATABASE_URL="postgresql://usuario:senha@host:5432/banco"',
+    '',
+    'Se voce usa Supabase/Vercel, copie a connection string do banco para essa variavel.',
+  ].join('\n'));
+  process.exit(1);
+}
+
+const { prisma } = require('../src/lib/prisma');
+const { DrawsService } = require('../src/draws/draws.service');
 
 const modalities = [
   { value: 'male', label: 'Masculino' },
@@ -104,7 +148,7 @@ async function createAcceptedTeam(eventId: string, modality: Modality, seed: num
   });
 }
 
-async function completeMatch(drawsService: DrawsService, matchId: string) {
+async function completeMatch(drawsService: any, matchId: string) {
   const match = await prisma.match.findUnique({ where: { id: matchId } });
   if (!match?.team1Id || !match.team2Id) return false;
 
@@ -131,7 +175,7 @@ async function completeMatch(drawsService: DrawsService, matchId: string) {
   return true;
 }
 
-async function finishEvent(drawsService: DrawsService, eventId: string) {
+async function finishEvent(drawsService: any, eventId: string) {
   const groupMatches = await prisma.match.findMany({
     where: { eventId, groupId: { not: null }, status: 'scheduled' },
     orderBy: [{ roundName: 'asc' }, { matchNumber: 'asc' }],
