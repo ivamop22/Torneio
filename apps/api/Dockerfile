@@ -37,4 +37,4 @@ COPY --from=base /app/apps/api/package.json ./apps/api/package.json
 EXPOSE 3001
 
 WORKDIR /app/apps/api
-CMD ["sh", "-c", "cd /app/packages/db && npx prisma migrate deploy && cd /app/apps/api && node dist/main.js"]
+CMD ["node", "dist/main.js"]
