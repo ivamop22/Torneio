@@ -1,98 +1,59 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { TournamentsTab } from '../components/admin/TournamentsTab';
+import { EventsTab }      from '../components/admin/EventsTab';
+import { PlayersTab }     from '../components/admin/PlayersTab';
+import { TeamsTab }       from '../components/admin/TeamsTab';
+import { DrawTab }        from '../components/admin/DrawTab';
+import { Toast }          from '../components/ui/Toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
-// ─── Tipos ───────────────────────────────────────────────────────────────────
 type Tournament = { id: string; name: string; slug: string; status: string; city?: string | null; state?: string | null; startDate: string; endDate: string };
 type EventItem  = { id: string; tournamentId: string; name: string; gender: string; format: string; category?: string | null; status: string };
 type Player     = { id: string; fullName: string; gender?: string | null; email?: string | null; rankingPoints: number };
 type Team       = { id: string; seed?: number | null; status: string; player1?: { id: string; fullName: string } | null; player2?: { id: string; fullName: string } | null };
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
-// ─── Estados brasileiros ──────────────────────────────────────────────────────
-const ESTADOS_BR = [
-  { uf: 'AC', nome: 'Acre' },
-  { uf: 'AL', nome: 'Alagoas' },
-  { uf: 'AP', nome: 'Amapá' },
-  { uf: 'AM', nome: 'Amazonas' },
-  { uf: 'BA', nome: 'Bahia' },
-  { uf: 'CE', nome: 'Ceará' },
-  { uf: 'DF', nome: 'Distrito Federal' },
-  { uf: 'ES', nome: 'Espírito Santo' },
-  { uf: 'GO', nome: 'Goiás' },
-  { uf: 'MA', nome: 'Maranhão' },
-  { uf: 'MT', nome: 'Mato Grosso' },
-  { uf: 'MS', nome: 'Mato Grosso do Sul' },
-  { uf: 'MG', nome: 'Minas Gerais' },
-  { uf: 'PA', nome: 'Pará' },
-  { uf: 'PB', nome: 'Paraíba' },
-  { uf: 'PR', nome: 'Paraná' },
-  { uf: 'PE', nome: 'Pernambuco' },
-  { uf: 'PI', nome: 'Piauí' },
-  { uf: 'RJ', nome: 'Rio de Janeiro' },
-  { uf: 'RN', nome: 'Rio Grande do Norte' },
-  { uf: 'RS', nome: 'Rio Grande do Sul' },
-  { uf: 'RO', nome: 'Rondônia' },
-  { uf: 'RR', nome: 'Roraima' },
-  { uf: 'SC', nome: 'Santa Catarina' },
-  { uf: 'SP', nome: 'São Paulo' },
-  { uf: 'SE', nome: 'Sergipe' },
-  { uf: 'TO', nome: 'Tocantins' },
+type Tab = 'torneios' | 'eventos' | 'jogadores' | 'duplas' | 'chaveamento';
+
+const TABS: { key: Tab; icon: string; label: string }[] = [
+  { key: 'torneios',    icon: '🏆', label: 'Torneios'    },
+  { key: 'eventos',     icon: '📋', label: 'Eventos'     },
+  { key: 'jogadores',   icon: '👤', label: 'Jogadores'   },
+  { key: 'duplas',      icon: '👥', label: 'Duplas'       },
+  { key: 'chaveamento', icon: '🎯', label: 'Chaveamento' },
 ];
 
+async function apiRequest(url: string, method: string, body?: any) {
+  const r = await fetch(`${API_URL}${url}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
+    throw new Error(err.message || `HTTP ${r.status}`);
+  }
+  if (r.status === 204) return null;
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
+}
+
 export default function AdminPage() {
-  const [tab, setTab] = useState<'torneios' | 'eventos' | 'jogadores' | 'duplas' | 'chaveamento'>('torneios');
+  const [tab, setTab]             = useState<Tab>('torneios');
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [events,      setEvents]      = useState<EventItem[]>([]);
-  const [players,     setPlayers]     = useState<Player[]>([]);
-  const [teams,       setTeams]       = useState<Team[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [message,     setMessage]     = useState('');
-  const [msgType,     setMsgType]     = useState<'ok' | 'err'>('ok');
+  const [events, setEvents]       = useState<EventItem[]>([]);
+  const [players, setPlayers]     = useState<Player[]>([]);
+  const [teams, setTeams]         = useState<Team[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [toast, setToast]         = useState('');
+  const [toastType, setToastType] = useState<'ok' | 'err'>('ok');
 
-  // Torneio form
-  const [tName,   setTName]   = useState('');
-  const [tState,  setTState]  = useState('');
-  const [tCity,   setTCity]   = useState('');
-  const [tStart,  setTStart]  = useState('');
-  const [tEnd,    setTEnd]    = useState('');
-  const [cidades, setCidades] = useState<string[]>([]);
-  const [cidadesLoading, setCidadesLoading] = useState(false);
-
-  // Evento form
-  const [evTournamentId, setEvTournamentId] = useState('');
-  const [evName,         setEvName]         = useState('');
-  const [evGender,       setEvGender]       = useState('mixed');
-  const [evFormat,       setEvFormat]       = useState('group_knockout');
-  const [evCategory,     setEvCategory]     = useState('');
-  const [evMaxPairs,     setEvMaxPairs]     = useState('');
-
-  // Jogador form
-  const [pName,   setPName]   = useState('');
-  const [pGender, setPGender] = useState('');
-  const [pEmail,  setPEmail]  = useState('');
-  const [pNat,    setPNat]    = useState('BR');
-  const [pState,  setPState]  = useState('');
-  const [pCity,   setPCity]   = useState('');
-  const [pCidades, setPCidades] = useState<string[]>([]);
-  const [pCidadesLoading, setPCidadesLoading] = useState(false);
-  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
-
-  // Dupla / chaveamento form
-  const [teamEventId, setTeamEventId] = useState('');
-  const [p1Id, setP1Id]   = useState('');
-  const [p2Id, setP2Id]   = useState('');
-  const [tSeed, setTSeed] = useState('');
-  const [drawEventId, setDrawEventId] = useState('');
-  const [groupCount,  setGroupCount]  = useState('2');
-
-  // ─── Helpers ─────────────────────────────────────────────────────────────
-  const showMsg = (msg: string, type: 'ok' | 'err' = 'ok') => {
-    setMessage(msg); setMsgType(type);
-    setTimeout(() => setMessage(''), 4000);
-  };
+  const showMsg = useCallback((msg: string, type: 'ok' | 'err' = 'ok') => {
+    setToast(msg);
+    setToastType(type);
+  }, []);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -107,605 +68,89 @@ export default function AdminPage() {
       setEvents(Array.isArray(es) ? es : []);
       setPlayers(Array.isArray(ps) ? ps : []);
       setTeams(Array.isArray(tms) ? tms : []);
-      if (Array.isArray(ts) && ts.length && !evTournamentId) setEvTournamentId(ts[0].id);
-      if (Array.isArray(es) && es.length && !teamEventId) setTeamEventId(es[0].id);
-      if (Array.isArray(es) && es.length && !drawEventId) setDrawEventId(es[0].id);
-    } catch (err) {
-      showMsg('❌ Erro ao carregar dados da API', 'err');
+    } catch {
+      showMsg('Erro ao conectar com a API', 'err');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showMsg]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Carregar cidades via IBGE quando estado muda (torneio)
-  useEffect(() => {
-    if (!tState) { setCidades([]); setTCity(''); return; }
-    setCidadesLoading(true);
-    setTCity('');
-    fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${tState}/municipios?orderBy=nome`)
-      .then(r => r.json())
-      .then((data: { nome: string }[]) => setCidades(data.map(c => c.nome)))
-      .catch(() => setCidades([]))
-      .finally(() => setCidadesLoading(false));
-  }, [tState]);
-
-  // Carregar cidades via IBGE quando estado muda (jogador)
-  useEffect(() => {
-    if (!pState) { setPCidades([]); setPCity(''); return; }
-    setPCidadesLoading(true);
-    setPCity('');
-    fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${pState}/municipios?orderBy=nome`)
-      .then(r => r.json())
-      .then((data: { nome: string }[]) => setPCidades(data.map(c => c.nome)))
-      .catch(() => setPCidades([]))
-      .finally(() => setPCidadesLoading(false));
-  }, [pState]);
-
-  async function apiRequest(url: string, method: HttpMethod, body?: any) {
-    const r = await fetch(`${API_URL}${url}`, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
-      throw new Error(err.message || `HTTP ${r.status}`);
-    }
-    if (r.status === 204) return null;
-    const text = await r.text();
-    return text ? JSON.parse(text) : null;
-  }
-
-  async function handleTournament(e: FormEvent) {
-    e.preventDefault();
-    try {
-      const slug = tName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-') + '-' + Date.now();
-      await apiRequest('/tournaments', 'POST', { name: tName, slug, city: tCity || undefined, state: tState || undefined, startDate: tStart, endDate: tEnd });
-      setTName(''); setTCity(''); setTState(''); setTStart(''); setTEnd('');
-      showMsg('✅ Torneio criado com sucesso!'); loadAll();
-    } catch (err: any) {
-      showMsg(`❌ Erro: ${err.message}`, 'err');
-    }
-  }
-
-  async function handleEvent(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await apiRequest('/events', 'POST', { tournamentId: evTournamentId, name: evName, gender: evGender, format: evFormat, category: evCategory || undefined, maxPairs: evMaxPairs ? Number(evMaxPairs) : undefined });
-      setEvName(''); setEvCategory(''); setEvMaxPairs('');
-      showMsg('✅ Evento criado!'); loadAll();
-    } catch (err: any) {
-      showMsg(`❌ Erro: ${err.message}`, 'err');
-    }
-  }
-
-  async function handleDeleteTournament(tournamentId: string) {
-    try {
-      await apiRequest(`/tournaments/${tournamentId}`, 'DELETE');
-      showMsg('✅ Torneio excluído com sucesso!');
-      loadAll();
-    } catch (err: any) {
-      showMsg(`❌ Erro: ${err.message}`, 'err');
-    }
-  }
-
-  async function handlePlayer(e: FormEvent) {
-    e.preventDefault();
-    try {
-      const payload = { fullName: pName, gender: pGender || undefined, email: pEmail || undefined, nationality: pNat || undefined };
-      if (editingPlayerId) {
-        await apiRequest(`/players/${editingPlayerId}`, 'PUT', payload);
-      } else {
-        await apiRequest('/players', 'POST', payload);
-      }
-      setPName(''); setPGender(''); setPEmail(''); setPNat('BR'); setPState(''); setPCity('');
-      setEditingPlayerId(null);
-      showMsg(editingPlayerId ? '✅ Jogador atualizado!' : '✅ Jogador cadastrado!');
-      loadAll();
-    } catch (err: any) {
-      showMsg(`❌ Erro: ${err.message}`, 'err');
-    }
-  }
-
-  function handleEditPlayer(player: Player) {
-    setEditingPlayerId(player.id);
-    setPName(player.fullName ?? '');
-    setPGender(player.gender ?? '');
-    setPEmail(player.email ?? '');
-    setPNat('BR');
-    setPState('');
-    setPCity('');
-    setTab('jogadores');
-  }
-
-  async function handleDeletePlayer(playerId: string) {
-    try {
-      await apiRequest(`/players/${playerId}`, 'DELETE');
-      if (editingPlayerId === playerId) {
-        setEditingPlayerId(null);
-        setPName(''); setPGender(''); setPEmail(''); setPNat('BR'); setPState(''); setPCity('');
-      }
-      showMsg('✅ Jogador removido com sucesso!');
-      loadAll();
-    } catch (err: any) {
-      showMsg(`❌ Erro: ${err.message}`, 'err');
-    }
-  }
-
-  async function handleTeam(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await apiRequest('/teams', 'POST', { eventId: teamEventId, player1Id: p1Id, player2Id: p2Id, seed: tSeed ? Number(tSeed) : undefined });
-      setP1Id(''); setP2Id(''); setTSeed('');
-      showMsg('✅ Dupla criada!'); loadAll();
-    } catch (err: any) {
-      showMsg(`❌ Erro: ${err.message}`, 'err');
-    }
-  }
-
-  async function handleDraw(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await apiRequest('/draws/generate-group-knockout', 'POST', { eventId: drawEventId, groupCount: Number(groupCount) });
-      showMsg('🎯 Chaveamento gerado!'); loadAll();
-      const ev = events.find(ev => ev.id === drawEventId);
-      const t  = tournaments.find(t => t.id === ev?.tournamentId);
-      if (t) window.open(`/torneios/${t.slug}`, '_blank');
-    } catch (err: any) {
-      showMsg(`❌ Erro: ${err.message}`, 'err');
-    }
-  }
-
-  // ─── Estilos ──────────────────────────────────────────────────────────────
-  const input  = 'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-green-500 transition-colors';
-  const select = `${input} cursor-pointer`;
-  const btn    = 'w-full bg-green-600 hover:bg-green-500 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm';
-  const label  = 'text-xs text-slate-500 mb-1 block';
-
-  const TABS = [
-    { key: 'torneios',    label: '🏆 Torneios' },
-    { key: 'eventos',     label: '📋 Eventos' },
-    { key: 'jogadores',   label: '👤 Jogadores' },
-    { key: 'duplas',      label: '👥 Duplas' },
-    { key: 'chaveamento', label: '🎯 Chaveamento' },
-  ] as const;
+  const tabProps = { apiRequest, onRefresh: loadAll, showMsg };
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
       {/* Navbar */}
-      <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🎾</span>
+      <nav className="navbar">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg" style={{ background: 'var(--accent-lime)' }}>
+              🎾
+            </div>
             <div>
-              <div className="text-white font-bold text-sm">Beach Tennis Platform</div>
-              <div className="text-slate-500 text-xs">Painel do Organizador</div>
+              <div className="font-display text-base font-bold tracking-wide" style={{ color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                Arena Beach Tennis
+              </div>
+              <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Painel do Organizador</div>
             </div>
           </div>
+
+          {/* Stats */}
+          <div className="hidden md:flex items-center gap-4 ml-6">
+            {[
+              { label: 'Torneios', value: tournaments.length },
+              { label: 'Jogadores', value: players.length },
+              { label: 'Duplas', value: teams.length },
+            ].map(s => (
+              <div key={s.label} className="flex items-center gap-1.5 text-sm">
+                <span className="font-display text-lg font-bold" style={{ color: 'var(--accent-lime)' }}>{s.value}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+
           <div className="ml-auto">
-            <a href="/torneios" target="_blank" className="text-sm text-green-400 hover:text-green-300 transition-colors">
-              Ver Torneios Públicos ↗
+            <a href="/torneios" target="_blank" className="btn btn-secondary btn-sm">
+              Ver ao vivo ↗
             </a>
           </div>
         </div>
       </nav>
 
-      {/* Toast */}
-      {message && (
-        <div className={`fixed top-16 right-4 z-50 border px-4 py-3 rounded-xl shadow-xl text-sm font-medium transition-all max-w-sm ${
-          msgType === 'ok' ? 'bg-green-800 text-green-100 border-green-600' : 'bg-red-900 text-red-100 border-red-700'
-        }`}>
-          {message}
-        </div>
-      )}
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Stats */}
-        {!loading && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            {[
-              { label: 'Torneios', value: tournaments.length, icon: '🏆', color: 'text-yellow-400' },
-              { label: 'Eventos',  value: events.length,      icon: '📋', color: 'text-blue-400' },
-              { label: 'Jogadores',value: players.length,     icon: '👤', color: 'text-purple-400' },
-              { label: 'Duplas',   value: teams.length,       icon: '👥', color: 'text-green-400' },
-            ].map(s => (
-              <div key={s.label} className="bg-slate-900 border border-slate-700/60 rounded-xl p-4 flex items-center gap-3">
-                <span className="text-2xl">{s.icon}</span>
-                <div>
-                  <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-                  <div className="text-xs text-slate-500">{s.label}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-slate-900 border border-slate-700/60 rounded-xl p-2 space-y-1">
-              {TABS.map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => setTab(t.key)}
-                  className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                    tab === t.key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Conteúdo principal */}
-          <div className="lg:col-span-2">
-
-            {/* ── TORNEIOS ────────────────────────────────── */}
-            {tab === 'torneios' && (
-              <div className="space-y-4">
-                <div className="bg-slate-900 border border-slate-700/60 rounded-xl p-5">
-                  <h2 className="font-bold text-slate-200 mb-4">Criar Torneio</h2>
-                  <form onSubmit={handleTournament} className="space-y-3">
-                    <div>
-                      <label className={label}>Nome do torneio *</label>
-                      <input className={input} placeholder="Ex: Open de Verão 2025" value={tName} onChange={e => setTName(e.target.value)} required />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={label}>Estado</label>
-                        <select className={select} value={tState} onChange={e => setTState(e.target.value)}>
-                          <option value="">Selecione...</option>
-                          {ESTADOS_BR.map(e => (
-                            <option key={e.uf} value={e.uf}>{e.uf} – {e.nome}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={label}>Cidade</label>
-                        <select className={select} value={tCity} onChange={e => setTCity(e.target.value)} disabled={!tState || cidadesLoading}>
-                          <option value="">
-                            {!tState ? 'Selecione o estado' : cidadesLoading ? 'Carregando...' : 'Selecione...'}
-                          </option>
-                          {cidades.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={label}>Data de início *</label>
-                        <input type="date" className={input} value={tStart} onChange={e => setTStart(e.target.value)} required />
-                      </div>
-                      <div>
-                        <label className={label}>Data de fim *</label>
-                        <input type="date" className={input} value={tEnd} onChange={e => setTEnd(e.target.value)} required />
-                      </div>
-                    </div>
-                    <button className={btn} type="submit">Criar Torneio</button>
-                  </form>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-700/60 rounded-xl overflow-hidden">
-                  <div className="px-5 py-3 border-b border-slate-800">
-                    <h3 className="font-semibold text-slate-300">Torneios cadastrados ({tournaments.length})</h3>
-                  </div>
-                  {loading ? (
-                    <div className="p-8 text-center text-slate-500">Carregando...</div>
-                  ) : (
-                    <div className="divide-y divide-slate-800">
-                      {tournaments.map(t => (
-                        <div key={t.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                          <div>
-                            <div className="font-medium text-slate-200">{t.name}</div>
-                            <div className="text-xs text-slate-500">
-                              {t.city ? `${t.city}${t.state ? ` – ${t.state}` : ''}` : t.state ?? '—'} • {t.startDate?.slice(0,10)}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <a href={`/torneios/${t.slug}`} target="_blank" className="text-xs text-green-400 hover:text-green-300 shrink-0">Ver →</a>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTournament(t.id)}
-                              className="text-xs text-red-400 hover:text-red-300 shrink-0 font-medium"
-                            >
-                              Excluir
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      {tournaments.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum torneio ainda.</div>}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* ── EVENTOS ─────────────────────────────────── */}
-            {tab === 'eventos' && (
-              <div className="space-y-4">
-                <div className="bg-slate-900 border border-slate-700/60 rounded-xl p-5">
-                  <h2 className="font-bold text-slate-200 mb-4">Criar Evento / Categoria</h2>
-                  <form onSubmit={handleEvent} className="space-y-3">
-                    <div>
-                      <label className={label}>Torneio *</label>
-                      <select className={select} value={evTournamentId} onChange={e => setEvTournamentId(e.target.value)} required>
-                        <option value="">Selecione um torneio</option>
-                        {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={label}>Nome do evento *</label>
-                      <input className={input} placeholder="Ex: Masculino A" value={evName} onChange={e => setEvName(e.target.value)} required />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={label}>Gênero</label>
-                        <select className={select} value={evGender} onChange={e => setEvGender(e.target.value)}>
-                          <option value="male">Masculino</option>
-                          <option value="female">Feminino</option>
-                          <option value="mixed">Misto</option>
-                          <option value="open">Open</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={label}>Formato</label>
-                        <select className={select} value={evFormat} onChange={e => setEvFormat(e.target.value)}>
-                          <option value="group_knockout">Grupos + Mata-mata</option>
-                          <option value="knockout">Mata-mata</option>
-                          <option value="round_robin">Round Robin</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={label}>Categoria</label>
-                        <input className={input} placeholder="Ex: A, B, C" value={evCategory} onChange={e => setEvCategory(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className={label}>Máx. duplas</label>
-                        <input className={input} placeholder="Ex: 16" type="number" value={evMaxPairs} onChange={e => setEvMaxPairs(e.target.value)} />
-                      </div>
-                    </div>
-                    <button className={btn} type="submit">Criar Evento</button>
-                  </form>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-700/60 rounded-xl overflow-hidden">
-                  <div className="px-5 py-3 border-b border-slate-800">
-                    <h3 className="font-semibold text-slate-300">Eventos ({events.length})</h3>
-                  </div>
-                  <div className="divide-y divide-slate-800">
-                    {events.map(ev => (
-                      <div key={ev.id} className="px-5 py-3">
-                        <div className="font-medium text-slate-200">{ev.name}</div>
-                        <div className="text-xs text-slate-500">{ev.gender} • {ev.format} • {ev.status}</div>
-                      </div>
-                    ))}
-                    {events.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum evento ainda.</div>}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── JOGADORES ───────────────────────────────── */}
-            {tab === 'jogadores' && (
-              <div className="space-y-4">
-                <div className="bg-slate-900 border border-slate-700/60 rounded-xl p-5">
-                  <h2 className="font-bold text-slate-200 mb-4">{editingPlayerId ? 'Editar Jogador' : 'Cadastrar Jogador'}</h2>
-                  <form onSubmit={handlePlayer} className="space-y-3">
-                    <div>
-                      <label className={label}>Nome completo *</label>
-                      <input className={input} placeholder="Ex: João Silva" value={pName} onChange={e => setPName(e.target.value)} required />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={label}>Gênero</label>
-                        <select className={select} value={pGender} onChange={e => setPGender(e.target.value)}>
-                          <option value="">Não informar</option>
-                          <option value="male">Masculino</option>
-                          <option value="female">Feminino</option>
-                          <option value="other">Outro</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={label}>Nacionalidade</label>
-                        <input className={input} placeholder="BR" value={pNat} onChange={e => setPNat(e.target.value)} />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className={label}>E-mail</label>
-                      <input className={input} type="email" placeholder="jogador@email.com" value={pEmail} onChange={e => setPEmail(e.target.value)} />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={label}>Estado</label>
-                        <select className={select} value={pState} onChange={e => setPState(e.target.value)}>
-                          <option value="">Selecione...</option>
-                          {ESTADOS_BR.map(e => (
-                            <option key={e.uf} value={e.uf}>{e.uf} – {e.nome}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={label}>Cidade</label>
-                        <select className={select} value={pCity} onChange={e => setPCity(e.target.value)} disabled={!pState || pCidadesLoading}>
-                          <option value="">
-                            {!pState ? 'Selecione o estado' : pCidadesLoading ? 'Carregando...' : 'Selecione...'}
-                          </option>
-                          {pCidades.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button className={btn} type="submit">
-                        {editingPlayerId ? 'Salvar Alterações' : 'Cadastrar Jogador'}
-                      </button>
-                      {editingPlayerId && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingPlayerId(null);
-                            setPName(''); setPGender(''); setPEmail(''); setPNat('BR'); setPState(''); setPCity('');
-                          }}
-                          className="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors text-sm"
-                        >
-                          Cancelar
-                        </button>
-                      )}
-                    </div>
-                  </form>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-700/60 rounded-xl overflow-hidden">
-                  <div className="px-5 py-3 border-b border-slate-800">
-                    <h3 className="font-semibold text-slate-300">Jogadores ({players.length})</h3>
-                  </div>
-                  <div className="divide-y divide-slate-800 max-h-80 overflow-y-auto">
-                    {players.map(p => (
-                      <div key={p.id} className="px-5 py-2.5 flex items-center justify-between gap-4">
-                        <div>
-                          <div className="font-medium text-slate-200 text-sm">{p.fullName}</div>
-                          <div className="text-xs text-slate-500">{p.gender ?? '—'} • {p.email ?? '—'}</div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-xs text-yellow-400 font-bold whitespace-nowrap">{p.rankingPoints} pts</div>
-                          <button
-                            type="button"
-                            onClick={() => handleEditPlayer(p)}
-                            className="text-xs text-blue-400 hover:text-blue-300 font-medium"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePlayer(p.id)}
-                            className="text-xs text-red-400 hover:text-red-300 font-medium"
-                          >
-                            Excluir
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {players.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum jogador ainda.</div>}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── DUPLAS ──────────────────────────────────── */}
-            {tab === 'duplas' && (
-              <div className="space-y-4">
-                <div className="bg-slate-900 border border-slate-700/60 rounded-xl p-5">
-                  <h2 className="font-bold text-slate-200 mb-4">Criar Dupla</h2>
-                  <form onSubmit={handleTeam} className="space-y-3">
-                    <div>
-                      <label className={label}>Evento *</label>
-                      <select className={select} value={teamEventId} onChange={e => setTeamEventId(e.target.value)} required>
-                        <option value="">Selecione evento</option>
-                        {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={label}>Jogador 1 *</label>
-                      <select className={select} value={p1Id} onChange={e => setP1Id(e.target.value)} required>
-                        <option value="">Selecione jogador 1</option>
-                        {players.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={label}>Jogador 2 *</label>
-                      <select className={select} value={p2Id} onChange={e => setP2Id(e.target.value)} required>
-                        <option value="">Selecione jogador 2</option>
-                        {players.filter(p => p.id !== p1Id).map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={label}>Seed (opcional)</label>
-                      <input className={input} placeholder="Ex: 1" type="number" value={tSeed} onChange={e => setTSeed(e.target.value)} />
-                    </div>
-                    <button className={btn} type="submit">Criar Dupla</button>
-                  </form>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-700/60 rounded-xl overflow-hidden">
-                  <div className="px-5 py-3 border-b border-slate-800">
-                    <h3 className="font-semibold text-slate-300">Duplas ({teams.length})</h3>
-                  </div>
-                  <div className="divide-y divide-slate-800 max-h-80 overflow-y-auto">
-                    {teams.map(t => (
-                      <div key={t.id} className="px-5 py-2.5">
-                        <div className="font-medium text-slate-200 text-sm">
-                          {t.player1?.fullName ?? '?'} / {t.player2?.fullName ?? '?'}
-                        </div>
-                        <div className="text-xs text-slate-500">Seed: {t.seed ?? '—'}</div>
-                      </div>
-                    ))}
-                    {teams.length === 0 && <div className="p-8 text-center text-slate-500">Nenhuma dupla ainda.</div>}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── CHAVEAMENTO ─────────────────────────────── */}
-            {tab === 'chaveamento' && (
-              <div className="space-y-4">
-                <div className="bg-slate-900 border border-slate-700/60 rounded-xl p-5">
-                  <h2 className="font-bold text-slate-200 mb-1">🤖 Motor de Chaveamento Automático</h2>
-                  <p className="text-slate-500 text-sm mb-5">
-                    Gera grupos, distribuição serpentina, round-robin, mata-mata automático e detecta o campeão.
-                  </p>
-                  <form onSubmit={handleDraw} className="space-y-3">
-                    <div>
-                      <label className={label}>Evento *</label>
-                      <select className={select} value={drawEventId} onChange={e => setDrawEventId(e.target.value)} required>
-                        <option value="">Selecione evento</option>
-                        {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={label}>Número de grupos</label>
-                      <select className={select} value={groupCount} onChange={e => setGroupCount(e.target.value)}>
-                        {[2, 3, 4].map(n => <option key={n} value={n}>{n} grupos</option>)}
-                      </select>
-                    </div>
-                    <button className={btn} type="submit">🎯 Gerar Chaveamento</button>
-                  </form>
-                </div>
-
-                <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-5">
-                  <h3 className="font-semibold text-slate-300 mb-3">Como funciona o motor</h3>
-                  <div className="space-y-3 text-sm">
-                    {[
-                      { step: '1', title: 'Distribuição Serpentina',  desc: 'Times distribuídos nos grupos por seed (S1→G1, S2→G2, S3→G2, S4→G1...)' },
-                      { step: '2', title: 'Round-Robin por Grupo',    desc: 'Todas as duplas se enfrentam dentro do grupo.' },
-                      { step: '3', title: 'Classificação Automática', desc: 'Pts → Saldo Sets → Saldo Games. Top 2 de cada grupo avançam.' },
-                      { step: '4', title: 'Mata-Mata Gerado',         desc: 'Bracket criado automaticamente quando todos os grupos terminam.' },
-                      { step: '5', title: 'Avanço Automático',        desc: 'Vencedor avança para a próxima partida automaticamente.' },
-                      { step: '6', title: 'Campeão + Ranking',        desc: 'Vencedor da Final é o Campeão. Pontos de ranking creditados.' },
-                    ].map(s => (
-                      <div key={s.step} className="flex gap-3">
-                        <div className="w-6 h-6 rounded-full bg-green-700 text-white text-xs flex items-center justify-center shrink-0 mt-0.5 font-bold">{s.step}</div>
-                        <div>
-                          <div className="font-medium text-slate-200">{s.title}</div>
-                          <div className="text-slate-500 text-xs mt-0.5">{s.desc}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+        {/* Tabs */}
+        <div className="tab-list mb-6">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              className={`tab-item ${tab === t.key ? 'active' : ''}`}
+              onClick={() => setTab(t.key)}
+            >
+              <span>{t.icon}</span>
+              <span className="tab-label">{t.label}</span>
+            </button>
+          ))}
         </div>
+
+        {/* Loading */}
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '5rem 0', gap: '1rem' }}>
+            <span className="spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Carregando dados...</span>
+          </div>
+        ) : (
+          <>
+            {tab === 'torneios'    && <TournamentsTab tournaments={tournaments} {...tabProps} />}
+            {tab === 'eventos'     && <EventsTab events={events} tournaments={tournaments} {...tabProps} />}
+            {tab === 'jogadores'   && <PlayersTab players={players} {...tabProps} />}
+            {tab === 'duplas'      && <TeamsTab events={events} players={players} teams={teams} {...tabProps} />}
+            {tab === 'chaveamento' && <DrawTab events={events} tournaments={tournaments} {...tabProps} />}
+          </>
+        )}
       </div>
+
+      <Toast message={toast} type={toastType} onClose={() => setToast('')} />
     </div>
   );
 }

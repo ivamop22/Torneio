@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Beach Tennis Platform — Torneios ao Vivo',
-  description: 'Plataforma SaaS de gestão de torneios de Beach Tennis com chaveamento automático',
+  title: 'Arena Beach Tennis — Torneios ao Vivo',
+  description: 'Plataforma de gestão de torneios de Beach Tennis — chaveamento automático, resultados em tempo real e ranking',
   openGraph: {
-    title: 'Beach Tennis Platform',
-    description: 'Torneios de Beach Tennis com chaveamento automático',
+    title: 'Arena Beach Tennis',
+    description: 'Torneios de Beach Tennis com chaveamento automático e resultados ao vivo',
     type: 'website',
   },
 };
@@ -18,11 +18,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="bg-slate-950 text-slate-100 min-h-screen antialiased">
+      <body>
         {children}
       </body>
     </html>
