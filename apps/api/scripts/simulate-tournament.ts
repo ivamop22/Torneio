@@ -33,10 +33,16 @@ function playerGender(modality: Modality, playerIndex: number) {
 }
 
 async function createPlayer(fullName: string, gender: string, email: string) {
-  return prisma.player.upsert({
-    where: { email },
-    update: { fullName, gender, active: true, deletedAt: null },
-    create: {
+  const existing = await prisma.player.findFirst({ where: { email, deletedAt: null } });
+  if (existing) {
+    return prisma.player.update({
+      where: { id: existing.id },
+      data: { fullName, gender, active: true, deletedAt: null },
+    });
+  }
+
+  return prisma.player.create({
+    data: {
       fullName,
       gender,
       email,
@@ -199,7 +205,7 @@ async function main() {
   }
 
   for (const item of events) {
-    const prefix = `${item.modality.label} ${item.ageGroup.label} ${item.classLevel}`;
+    const prefix = `${slug} ${item.modality.label} ${item.ageGroup.label} ${item.classLevel}`;
     for (let seed = 1; seed <= 4; seed++) {
       await createAcceptedTeam(item.event.id, item.modality, seed, prefix);
     }
@@ -213,11 +219,12 @@ async function main() {
     await finishEvent(drawsService, finished.event.id);
   }
 
+  const eventIds = events.map((item) => item.event.id);
   const eventCount = await prisma.event.count({ where: { tournamentId: tournament.id } });
-  const teamCount = await prisma.team.count({ where: { event: { tournamentId: tournament.id } } });
-  const matchCount = await prisma.match.count({ where: { event: { tournamentId: tournament.id } } });
+  const teamCount = await prisma.team.count({ where: { eventId: { in: eventIds } } });
+  const matchCount = await prisma.match.count({ where: { eventId: { in: eventIds } } });
   const completedMatches = await prisma.match.count({
-    where: { event: { tournamentId: tournament.id }, status: 'completed' },
+    where: { eventId: { in: eventIds }, status: 'completed' },
   });
   const championEvent = finished
     ? await drawsService.getBracketData(finished.event.id)
