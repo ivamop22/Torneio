@@ -1,17 +1,74 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { prisma } from '../lib/prisma';
 import { DrawsService } from './draws.service';
 
 @Controller()
 export class DrawsController {
   constructor(private readonly drawsService: DrawsService) {}
 
-  // Gerar chaveamento grupos + mata-mata
   @Post('draws/generate-group-knockout')
   async generate(@Body() body: { eventId: string; groupCount?: number }) {
     return this.drawsService.generateGroupKnockout(body.eventId, body.groupCount ?? 2);
   }
 
-  // Gerar mata-mata manualmente (depois da fase de grupos)
+  @Post('tournaments/:tournamentId/draws/generate-all')
+  async generateAllForTournament(@Param('tournamentId') tournamentId: string) {
+    const events = await prisma.event.findMany({
+      where: { tournamentId, deletedAt: null },
+      orderBy: [{ gender: 'asc' }, { category: 'asc' }],
+    });
+
+    const results = [];
+
+    for (const event of events) {
+      const teamCount = await prisma.team.count({
+        where: { eventId: event.id, status: 'accepted', deletedAt: null },
+      });
+
+      if (teamCount < 4) {
+        results.push({
+          eventId: event.id,
+          eventName: event.name,
+          status: 'skipped',
+          reason: 'Minimo de 4 duplas para gerar chaveamento.',
+          teamCount,
+        });
+        continue;
+      }
+
+      const groupCount = teamCount >= 8 ? 4 : 2;
+
+      try {
+        const draw = await this.drawsService.generateGroupKnockout(event.id, groupCount);
+        results.push({
+          eventId: event.id,
+          eventName: event.name,
+          status: 'generated',
+          groupCount,
+          teamCount,
+          drawId: draw.draw.id,
+        });
+      } catch (err: any) {
+        results.push({
+          eventId: event.id,
+          eventName: event.name,
+          status: 'error',
+          reason: err.message ?? 'Erro ao gerar chaveamento.',
+          teamCount,
+        });
+      }
+    }
+
+    return {
+      tournamentId,
+      totalEvents: events.length,
+      generated: results.filter((item) => item.status === 'generated').length,
+      skipped: results.filter((item) => item.status === 'skipped').length,
+      errors: results.filter((item) => item.status === 'error').length,
+      results,
+    };
+  }
+
   @Post('events/:eventId/generate-knockout')
   async generateKnockout(
     @Param('eventId') eventId: string,
@@ -20,7 +77,6 @@ export class DrawsController {
     return this.drawsService.generateKnockout(eventId, body.advancePerGroup ?? 2);
   }
 
-  // Recalcular standings de um grupo
   @Post('events/:eventId/standings/recalculate')
   async recalculate(@Param('eventId') eventId: string) {
     return { success: true, message: 'Use o endpoint /groups/:groupId/standings' };
@@ -31,13 +87,11 @@ export class DrawsController {
     return this.drawsService.recalculateStandings(groupId);
   }
 
-  // Dados completos do bracket (grupos + knockout + campeão)
   @Get('events/:eventId/bracket')
   async getBracket(@Param('eventId') eventId: string) {
     return this.drawsService.getBracketData(eventId);
   }
 
-  // Ranking geral de jogadores
   @Get('ranking')
   async getRanking(@Query('category') category?: string) {
     return this.drawsService.getRanking(category);
