@@ -9,6 +9,14 @@ import {
 } from '@nestjs/common';
 import { prisma } from '../lib/prisma';
 
+const MODALITIES = [
+  { gender: 'male', label: 'Masculino' },
+  { gender: 'female', label: 'Feminino' },
+  { gender: 'mixed', label: 'Mista' },
+];
+const AGE_GROUPS = ['Infantil', 'Junior', 'Adulto'];
+const CLASS_LEVELS = ['A', 'B', 'C', 'D'];
+
 @Controller('tournaments')
 export class TournamentsController {
   @Get()
@@ -38,6 +46,56 @@ export class TournamentsController {
     });
   }
 
+  @Post(':id/default-events')
+  async createDefaultEvents(@Param('id') id: string) {
+    const tournament = await prisma.tournament.findFirst({
+      where: { id, deleted_at: null },
+    });
+
+    if (!tournament) {
+      throw new NotFoundException('Torneio nao encontrado');
+    }
+
+    const createdOrExisting = [];
+
+    for (const modality of MODALITIES) {
+      for (const ageGroup of AGE_GROUPS) {
+        for (const classLevel of CLASS_LEVELS) {
+          const category = `${ageGroup} ${classLevel}`;
+          const name = `${modality.label} ${category}`;
+
+          const event =
+            (await prisma.event.findFirst({
+              where: {
+                tournamentId: id,
+                gender: modality.gender,
+                category,
+                deletedAt: null,
+              },
+            })) ??
+            (await prisma.event.create({
+              data: {
+                tournamentId: id,
+                name,
+                gender: modality.gender,
+                format: 'group_knockout',
+                category,
+                status: 'open',
+              },
+            }));
+
+          createdOrExisting.push(event);
+        }
+      }
+    }
+
+    return {
+      tournamentId: id,
+      count: createdOrExisting.length,
+      events: createdOrExisting,
+    };
+  }
+
   @Delete(':id')
   async remove(@Param('id') id: string) {
     const existing = await prisma.tournament.findFirst({
@@ -45,7 +103,7 @@ export class TournamentsController {
     });
 
     if (!existing) {
-      throw new NotFoundException('Torneio não encontrado');
+      throw new NotFoundException('Torneio nao encontrado');
     }
 
     return prisma.tournament.update({
