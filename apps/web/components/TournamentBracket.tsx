@@ -70,8 +70,37 @@ function MatchCard({ match, apiUrl, onRefresh }: { match: Match; apiUrl: string;
     onRefresh();
   }
 
+  const bothTeamsPresent = Boolean(match.team1 && match.team2);
+
   function TeamRow({ team, isWinner, slot }: { team: Team | null; isWinner: boolean; slot: 1 | 2 }) {
     const opponent = slot === 1 ? match.team2 : match.team1;
+    const isPlaceholder = !team;
+
+    if (isPlaceholder) {
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          padding: '0.5rem 0.75rem',
+          borderRadius: '6px',
+          background: 'var(--bg-elevated)',
+          border: '1px solid transparent',
+          opacity: 0.5,
+        }}>
+          <span style={{
+            flex: 1,
+            fontSize: '0.75rem',
+            fontWeight: 500,
+            fontStyle: 'italic',
+            color: 'var(--text-faint)',
+          }}>
+            Aguardando classificação
+          </span>
+        </div>
+      );
+    }
+
     return (
       <div style={{
         display: 'flex',
@@ -93,12 +122,11 @@ function MatchCard({ match, apiUrl, onRefresh }: { match: Match; apiUrl: string;
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          color: !team ? 'var(--text-faint)' : isCompleted && isWinner ? '#00C850' : 'var(--text-primary)',
-          fontStyle: !team ? 'italic' : 'normal',
+          color: isCompleted && isWinner ? '#00C850' : 'var(--text-primary)',
         }}>
-          {team?.label ?? 'A definir'}
+          {team.label}
         </span>
-        {!isCompleted && match.team1 && match.team2 && team && opponent && (
+        {!isCompleted && bothTeamsPresent && opponent && (
           <button
             onClick={() => submitResult(team.id, opponent.id)}
             style={{

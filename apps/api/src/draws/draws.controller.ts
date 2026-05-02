@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { prisma } from '../lib/prisma';
 import { DrawsService } from './draws.service';
 
@@ -90,6 +90,15 @@ export class DrawsController {
   @Get('events/:eventId/bracket')
   async getBracket(@Param('eventId') eventId: string) {
     return this.drawsService.getBracketData(eventId);
+  }
+
+  @Put('events/:eventId/bracket/manual')
+  async assignManual(
+    @Param('eventId') eventId: string,
+    @Body()
+    body: { assignments: { matchId: string; team1Id: string | null; team2Id: string | null }[] },
+  ) {
+    return this.drawsService.assignMatchTeams(eventId, body.assignments ?? []);
   }
 
   @Get('ranking')

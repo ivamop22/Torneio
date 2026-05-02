@@ -7,11 +7,16 @@ export class MatchesController {
   constructor(private readonly drawsService: DrawsService) {}
 
   @Get()
-  async findAll(@Query('eventId') eventId?: string, @Query('groupId') groupId?: string) {
+  async findAll(
+    @Query('eventId') eventId?: string,
+    @Query('groupId') groupId?: string,
+    @Query('status') status?: string,
+  ) {
     return prisma.match.findMany({
       where: {
         ...(eventId ? { eventId } : {}),
         ...(groupId ? { groupId } : {}),
+        ...(status ? { status } : {}),
       },
       include: {
         team1: { include: { player1: true, player2: true } },

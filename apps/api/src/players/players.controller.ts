@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Put,
+  HttpCode,
 } from '@nestjs/common';
 import { prisma } from '../lib/prisma';
 
@@ -173,6 +174,45 @@ export class PlayersController {
         nationality: body.nationality ?? existing.nationality,
       },
     });
+  }
+
+  @Delete('bulk')
+  @HttpCode(200)
+  async bulkDelete(@Body() body: { ids: string[] }) {
+    const ids = Array.isArray(body?.ids) ? body.ids : [];
+    const skipped: string[] = [];
+    const deleted: string[] = [];
+
+    for (const id of ids) {
+      const player = await prisma.player.findFirst({
+        where: { id, deletedAt: null },
+      });
+
+      if (!player) continue;
+
+      const activeMatch = await prisma.match.findFirst({
+        where: {
+          OR: [
+            { team1: { OR: [{ player1Id: id }, { player2Id: id }] } },
+            { team2: { OR: [{ player1Id: id }, { player2Id: id }] } },
+          ],
+          status: { in: ['scheduled', 'live', 'completed'] },
+        },
+      });
+
+      if (activeMatch) {
+        skipped.push(id);
+        continue;
+      }
+
+      await prisma.player.update({
+        where: { id },
+        data: { deletedAt: new Date(), active: false },
+      });
+      deleted.push(id);
+    }
+
+    return { deleted: deleted.length, skipped: skipped.length, skippedIds: skipped };
   }
 
   @Delete(':id')

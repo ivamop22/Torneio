@@ -514,6 +514,41 @@ export class DrawsService {
     };
   }
 
+  async assignMatchTeams(
+    eventId: string,
+    assignments: { matchId: string; team1Id: string | null; team2Id: string | null }[],
+  ) {
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Evento nao encontrado.');
+
+    const completedMatch = await prisma.match.findFirst({
+      where: { eventId, status: 'completed' },
+    });
+    if (completedMatch) {
+      throw new BadRequestException(
+        'Nao e possivel reatribuir duplas quando ja existem partidas concluidas para este evento.',
+      );
+    }
+
+    const updated = [];
+    for (const assignment of assignments) {
+      const match = await prisma.match.update({
+        where: { id: assignment.matchId },
+        data: {
+          team1Id: assignment.team1Id,
+          team2Id: assignment.team2Id,
+        },
+        include: {
+          team1: { include: { player1: true, player2: true } },
+          team2: { include: { player1: true, player2: true } },
+        },
+      });
+      updated.push(match);
+    }
+
+    return updated;
+  }
+
   async getRanking(category?: string) {
     const players = await prisma.player.findMany({
       where: { active: true, deletedAt: null },

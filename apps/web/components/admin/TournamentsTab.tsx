@@ -198,15 +198,23 @@ export function TournamentsTab({ tournaments, apiRequest, onRefresh, showMsg }: 
         )}
       </div>
 
-      {confirmId && (
-        <ConfirmDialog
-          title="Excluir torneio?"
-          description="Esta ação não pode ser desfeita. Todos os dados do torneio serão removidos."
-          confirmLabel="Excluir"
-          onConfirm={() => handleDelete(confirmId)}
-          onCancel={() => setConfirmId(null)}
-        />
-      )}
+      {confirmId && (() => {
+        const t = tournaments.find(x => x.id === confirmId);
+        const isActive = t && (t.status === 'ongoing' || t.status === 'live');
+        return (
+          <ConfirmDialog
+            title="Excluir torneio?"
+            description={
+              isActive
+                ? 'Este torneio está em andamento. Todos os dados (partidas, duplas, resultados) serão apagados permanentemente.'
+                : 'Esta ação não pode ser desfeita. Todos os dados do torneio serão removidos permanentemente.'
+            }
+            confirmLabel="Excluir permanentemente"
+            onConfirm={() => handleDelete(confirmId)}
+            onCancel={() => setConfirmId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

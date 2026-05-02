@@ -106,9 +106,46 @@ export class TournamentsController {
       throw new NotFoundException('Torneio nao encontrado');
     }
 
-    return prisma.tournament.update({
-      where: { id },
-      data: { deleted_at: new Date() },
+    const events = await prisma.event.findMany({
+      where: { tournamentId: id },
+      select: { id: true },
     });
+
+    const eventIds = events.map((e) => e.id);
+
+    await prisma.$transaction([
+      prisma.matchSet.deleteMany({
+        where: { match: { eventId: { in: eventIds } } },
+      }),
+      prisma.match.deleteMany({
+        where: { eventId: { in: eventIds } },
+      }),
+      prisma.eventGroupStanding.deleteMany({
+        where: { eventGroup: { eventId: { in: eventIds } } },
+      }),
+      prisma.eventGroup.deleteMany({
+        where: { eventId: { in: eventIds } },
+      }),
+      prisma.draw.deleteMany({
+        where: { eventId: { in: eventIds } },
+      }),
+      prisma.registration.deleteMany({
+        where: { eventId: { in: eventIds } },
+      }),
+      prisma.ranking.deleteMany({
+        where: { eventId: { in: eventIds } },
+      }),
+      prisma.team.deleteMany({
+        where: { eventId: { in: eventIds } },
+      }),
+      prisma.event.deleteMany({
+        where: { tournamentId: id },
+      }),
+      prisma.tournament.delete({
+        where: { id },
+      }),
+    ]);
+
+    return { deleted: true, id };
   }
 }
