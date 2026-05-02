@@ -32,6 +32,14 @@ export class EventsController {
   }
 
   @Roles('admin', 'superuser')
+  @Delete('bulk')
+  async removeBulk(@Body() body: { ids: string[] }) {
+    if (!Array.isArray(body.ids) || body.ids.length === 0) throw new BadRequestException('ids obrigatório');
+    await prisma.event.updateMany({ where: { id: { in: body.ids } }, data: { deletedAt: new Date() } });
+    return { success: true, deleted: body.ids.length };
+  }
+
+  @Roles('admin', 'superuser')
   @Delete(':id')
   async remove(@Param('id') id: string) {
     const event = await prisma.event.findUnique({ where: { id } });

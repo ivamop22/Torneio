@@ -2,6 +2,7 @@
 import { FormEvent, useState } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
+
 type Tournament = { id: string; name: string };
 type EventItem  = { id: string; tournamentId: string; name: string; gender: string; format: string; category?: string | null; status: string };
 
@@ -43,6 +44,8 @@ export function EventsTab({ events, tournaments, apiRequest, onRefresh, showMsg 
   const [maxPairs, setMaxPairs] = useState('');
   const [saving, setSaving]   = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -67,15 +70,45 @@ export function EventsTab({ events, tournaments, apiRequest, onRefresh, showMsg 
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selected.size === events.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(events.map(ev => ev.id)));
+    }
+  }
+
   async function handleDelete(id: string) {
     try {
       await apiRequest(`/events/${id}`, 'DELETE');
+      setSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
       showMsg('Evento excluído');
       onRefresh();
     } catch (err: any) {
       showMsg(err.message, 'err');
     } finally {
       setConfirmId(null);
+    }
+  }
+
+  async function handleBulkDelete() {
+    try {
+      await apiRequest('/events/bulk', 'DELETE', { ids: Array.from(selected) });
+      showMsg(`${selected.size} evento(s) excluído(s)`);
+      setSelected(new Set());
+      onRefresh();
+    } catch (err: any) {
+      showMsg(err.message, 'err');
+    } finally {
+      setConfirmBulk(false);
     }
   }
 
@@ -133,7 +166,24 @@ export function EventsTab({ events, tournaments, apiRequest, onRefresh, showMsg 
 
       {/* List */}
       <div className="flex flex-col gap-5">
-        <h2 className="font-display text-xl font-bold">Eventos <span className="text-[var(--text-muted)] font-normal text-base">({events.length})</span></h2>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="font-display text-xl font-bold">
+            Eventos <span className="text-[var(--text-muted)] font-normal text-base">({events.length})</span>
+          </h2>
+          {events.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button onClick={toggleAll} className="btn btn-sm" style={{ fontSize: '0.75rem' }}>
+                {selected.size === events.length ? 'Desmarcar todos' : 'Selecionar todos'}
+              </button>
+              {selected.size > 0 && (
+                <button onClick={() => setConfirmBulk(true)} className="btn btn-danger btn-sm">
+                  🗑 Excluir {selected.size} selecionado{selected.size > 1 ? 's' : ''}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {events.length === 0 ? (
           <div className="card">
             <div className="empty-state">
@@ -148,7 +198,17 @@ export function EventsTab({ events, tournaments, apiRequest, onRefresh, showMsg 
               <div className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest mb-2 px-1">{tournament.name}</div>
               <div className="flex flex-col gap-2">
                 {evs.map(ev => (
-                  <div key={ev.id} className="card p-3 flex items-center gap-3">
+                  <div
+                    key={ev.id}
+                    className="card p-3 flex items-center gap-3"
+                    style={{ outline: selected.has(ev.id) ? '2px solid var(--accent-lime)' : undefined }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(ev.id)}
+                      onChange={() => toggleSelect(ev.id)}
+                      style={{ width: 16, height: 16, accentColor: 'var(--accent-lime)', cursor: 'pointer', flexShrink: 0 }}
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm truncate">{ev.name}</span>
@@ -172,6 +232,16 @@ export function EventsTab({ events, tournaments, apiRequest, onRefresh, showMsg 
           confirmLabel="Excluir"
           onConfirm={() => handleDelete(confirmId)}
           onCancel={() => setConfirmId(null)}
+        />
+      )}
+
+      {confirmBulk && (
+        <ConfirmDialog
+          title={`Excluir ${selected.size} evento${selected.size > 1 ? 's' : ''}?`}
+          description="Todos os dados dos eventos selecionados (duplas, chaveamento, partidas) serão removidos."
+          confirmLabel={`Excluir ${selected.size}`}
+          onConfirm={handleBulkDelete}
+          onCancel={() => setConfirmBulk(false)}
         />
       )}
     </div>
