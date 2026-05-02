@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Request } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Request } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
 
@@ -29,6 +29,15 @@ export class EventsController {
         maxPairs: body.maxPairs ?? null,
       },
     });
+  }
+
+  @Roles('admin', 'superuser')
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    const event = await prisma.event.findUnique({ where: { id } });
+    if (!event) throw new NotFoundException('Evento não encontrado');
+    await prisma.event.update({ where: { id }, data: { deletedAt: new Date() } });
+    return { success: true };
   }
 
   @Roles('admin', 'superuser')
