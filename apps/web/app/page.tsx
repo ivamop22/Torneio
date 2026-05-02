@@ -115,6 +115,7 @@ export default function AdminPage() {
             {user?.role === 'superuser' && (
               <a href="/superuser" className="btn btn-secondary btn-sm">Superusuário</a>
             )}
+            <a href="/ajuda" className="btn btn-secondary btn-sm">📖 Manual</a>
             <a href="/torneios" target="_blank" className="btn btn-secondary btn-sm">
               Ver ao vivo ↗
             </a>
