@@ -36,9 +36,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (data) setUser(data);
-          else { localStorage.removeItem('auth_token'); setToken(null); }
+          else {
+            localStorage.removeItem('auth_token');
+            document.cookie = 'auth_token=; path=/; max-age=0';
+            setToken(null);
+          }
         })
-        .catch(() => { localStorage.removeItem('auth_token'); setToken(null); })
+        .catch(() => {
+          localStorage.removeItem('auth_token');
+          document.cookie = 'auth_token=; path=/; max-age=0';
+          setToken(null);
+        })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
@@ -57,12 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const data = await r.json();
     localStorage.setItem('auth_token', data.token);
+    document.cookie = `auth_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
     setToken(data.token);
     setUser(data.user);
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem('auth_token');
+    document.cookie = 'auth_token=; path=/; max-age=0';
     setToken(null);
     setUser(null);
     window.location.href = '/login';
