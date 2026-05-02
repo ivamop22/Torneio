@@ -1,11 +1,15 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { prisma } from '../lib/prisma';
+import { PrismaClient } from '@prisma/client';
 import { DrawsService } from '../draws/draws.service';
+import { Public } from '../auth/roles.decorator';
+
+const prisma = new PrismaClient();
 
 @Controller('matches')
 export class MatchesController {
   constructor(private readonly drawsService: DrawsService) {}
 
+  @Public()
   @Get()
   async findAll(
     @Query('eventId') eventId?: string,

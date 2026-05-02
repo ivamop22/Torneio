@@ -124,8 +124,9 @@ model Event {
   deletedAt          DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   // Relations
-  teams  Team[]
-  groups EventGroup[]
+  teams             Team[]
+  groups            EventGroup[]
+  registrationLinks RegistrationLink[]
 
   @@index([tournamentId, status], map: "idx_events_tournament_status")
   @@map("events")
@@ -350,6 +351,22 @@ model Ranking {
 
   @@index([playerId, rankingDate], map: "idx_rankings_player_date")
   @@map("rankings")
+}
+
+model RegistrationLink {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token     String    @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type      String    @db.VarChar(30) // 'admin_invite' | 'player_registration'
+  eventId   String?   @map("event_id") @db.Uuid
+  adminId   String    @map("admin_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  maxUses   Int       @default(1) @map("max_uses")
+  usedCount Int       @default(0) @map("used_count")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  event Event? @relation(fields: [eventId], references: [id])
+
+  @@map("registration_links")
 }
 
 model Notification {

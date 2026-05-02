@@ -1,22 +1,34 @@
 'use client';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
-export default function LoginPage() {
+function LoginForm() {
+  const { login, user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      const next = searchParams.get('next') ?? (user.role === 'superuser' ? '/superuser' : '/');
+      router.replace(next);
+    }
+  }, [user, authLoading, router, searchParams]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      // Placeholder — integrar com API de autenticação
-      await new Promise(r => setTimeout(r, 800));
-      window.location.href = '/';
-    } catch {
-      setError('E-mail ou senha incorretos');
+      await login(email, password);
+      // redirect handled by useEffect above
+    } catch (err: any) {
+      setError(err.message || 'E-mail ou senha incorretos');
     } finally {
       setLoading(false);
     }
@@ -141,5 +153,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

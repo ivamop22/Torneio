@@ -1,6 +1,9 @@
 import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
-import { prisma } from '../lib/prisma';
+import { PrismaClient } from '@prisma/client';
 import { DrawsService } from './draws.service';
+import { Public } from '../auth/roles.decorator';
+
+const prisma = new PrismaClient();
 
 @Controller()
 export class DrawsController {
@@ -87,6 +90,7 @@ export class DrawsController {
     return this.drawsService.recalculateStandings(groupId);
   }
 
+  @Public()
   @Get('events/:eventId/bracket')
   async getBracket(@Param('eventId') eventId: string) {
     return this.drawsService.getBracketData(eventId);
@@ -101,6 +105,7 @@ export class DrawsController {
     return this.drawsService.assignMatchTeams(eventId, body.assignments ?? []);
   }
 
+  @Public()
   @Get('ranking')
   async getRanking(@Query('category') category?: string) {
     return this.drawsService.getRanking(category);

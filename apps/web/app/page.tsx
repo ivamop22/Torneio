@@ -7,6 +7,7 @@ import { PlayersTab }     from '../components/admin/PlayersTab';
 import { TeamsTab }       from '../components/admin/TeamsTab';
 import { DrawTab }        from '../components/admin/DrawTab';
 import { Toast }          from '../components/ui/Toast';
+import { useAuth }        from '../contexts/AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -25,22 +26,8 @@ const TABS: { key: Tab; icon: string; label: string }[] = [
   { key: 'chaveamento', icon: '🎯', label: 'Chaveamento' },
 ];
 
-async function apiRequest(url: string, method: string, body?: any) {
-  const r = await fetch(`${API_URL}${url}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
-    throw new Error(err.message || `HTTP ${r.status}`);
-  }
-  if (r.status === 204) return null;
-  const text = await r.text();
-  return text ? JSON.parse(text) : null;
-}
-
 export default function AdminPage() {
+  const { user, token, logout, authFetch } = useAuth();
   const [tab, setTab]             = useState<Tab>('torneios');
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [events, setEvents]       = useState<EventItem[]>([]);
@@ -55,14 +42,28 @@ export default function AdminPage() {
     setToastType(type);
   }, []);
 
+  const apiRequest = useCallback(async (url: string, method: string, body?: any) => {
+    const r = await authFetch(url, {
+      method,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
+      throw new Error(err.message || `HTTP ${r.status}`);
+    }
+    if (r.status === 204) return null;
+    const text = await r.text();
+    return text ? JSON.parse(text) : null;
+  }, [authFetch]);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [ts, es, ps, tms] = await Promise.all([
-        fetch(`${API_URL}/tournaments`).then(r => r.json()),
-        fetch(`${API_URL}/events`).then(r => r.json()),
-        fetch(`${API_URL}/players`).then(r => r.json()),
-        fetch(`${API_URL}/teams`).then(r => r.json()),
+        authFetch('/tournaments').then(r => r.json()),
+        authFetch('/events').then(r => r.json()),
+        authFetch('/players').then(r => r.json()),
+        authFetch('/teams').then(r => r.json()),
       ]);
       setTournaments(Array.isArray(ts) ? ts : []);
       setEvents(Array.isArray(es) ? es : []);
@@ -73,7 +74,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [showMsg]);
+  }, [showMsg, authFetch]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -110,10 +111,18 @@ export default function AdminPage() {
             ))}
           </div>
 
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {user?.role === 'superuser' && (
+              <a href="/superuser" className="btn btn-secondary btn-sm">Superusuário</a>
+            )}
             <a href="/torneios" target="_blank" className="btn btn-secondary btn-sm">
               Ver ao vivo ↗
             </a>
+            {user && (
+              <button onClick={logout} className="btn btn-secondary btn-sm" title={user.email}>
+                Sair ({user.name.split(' ')[0]})
+              </button>
+            )}
           </div>
         </div>
       </nav>

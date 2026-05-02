@@ -6,8 +6,12 @@ import {
   NotFoundException,
   Param,
   Post,
+  Request,
 } from '@nestjs/common';
-import { prisma } from '../lib/prisma';
+import { PrismaClient } from '@prisma/client';
+import { Public, Roles } from '../auth/roles.decorator';
+
+const prisma = new PrismaClient();
 
 const MODALITIES = [
   { gender: 'male', label: 'Masculino' },
@@ -19,6 +23,7 @@ const CLASS_LEVELS = ['A', 'B', 'C', 'D'];
 
 @Controller('tournaments')
 export class TournamentsController {
+  @Public()
   @Get()
   async findAll() {
     return prisma.tournament.findMany({
@@ -27,8 +32,9 @@ export class TournamentsController {
     });
   }
 
+  @Roles('admin', 'superuser')
   @Post()
-  async create(@Body() body: any) {
+  async create(@Body() body: any, @Request() req: any) {
     const slug = body.name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
 
     return prisma.tournament.create({
@@ -42,6 +48,7 @@ export class TournamentsController {
         city: body.city,
         state: body.state,
         country: body.country ?? 'BR',
+        created_by: req.user?.userId ?? null,
       },
     });
   }
