@@ -1,5 +1,6 @@
 'use client';
 import { FormEvent, useEffect, useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 
 type EventItem  = { id: string; tournamentId: string; name: string; gender: string; format: string; category?: string | null; status: string };
 type Tournament = { id: string; name: string; slug: string };
@@ -57,9 +58,11 @@ function teamLabel(t: TeamItem) {
 }
 
 export function DrawTab({ events, tournaments, apiRequest, onRefresh, showMsg }: Props) {
+  const { authFetch } = useAuth();
   const [eventId, setEventId]       = useState(events[0]?.id ?? '');
   const [groupCount, setGroupCount] = useState('2');
   const [generating, setGenerating] = useState(false);
+  const [deleting, setDeleting]     = useState(false);
   const [mode, setMode]             = useState<Mode>('auto');
 
   const [bracketData, setBracketData]     = useState<BracketData | null>(null);
@@ -182,6 +185,29 @@ export function DrawTab({ events, tournaments, apiRequest, onRefresh, showMsg }:
       showMsg(err.message, 'err');
     } finally {
       setSavingManual(false);
+    }
+  }
+
+  async function handleDeleteBracket() {
+    if (!eventId) return;
+    if (!window.confirm('Tem certeza que deseja excluir o chaveamento? Todas as partidas e placares serão apagados.')) return;
+    setDeleting(true);
+    try {
+      const res = await authFetch(`/events/${eventId}/bracket`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message ?? `Erro ${res.status}`);
+      }
+      showMsg('Chaveamento excluído. Você pode gerar um novo.');
+      setBracketData(null);
+      setScheduledMatches([]);
+      setEventTeams([]);
+      setAssignments({});
+      onRefresh();
+    } catch (err: any) {
+      showMsg(err.message ?? 'Erro ao excluir chaveamento', 'err');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -335,15 +361,26 @@ export function DrawTab({ events, tournaments, apiRequest, onRefresh, showMsg }:
                   <h3 className="font-display text-xl font-bold">Chaveamento Gerado</h3>
                   <p className="text-sm text-[var(--text-muted)] mt-0.5">{bracketData!.groups.length} grupo(s) • {bracketData!.event.name}</p>
                 </div>
-                {selectedTournament?.slug && (
-                  <a
-                    href={`/torneios/${selectedTournament.slug}`}
-                    target="_blank"
-                    className="btn btn-secondary btn-sm shrink-0"
+                <div className="flex gap-2 shrink-0">
+                  {selectedTournament?.slug && (
+                    <a
+                      href={`/torneios/${selectedTournament.slug}`}
+                      target="_blank"
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Ver ao vivo ↗
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleDeleteBracket}
+                    disabled={deleting}
+                    className="btn btn-sm"
+                    style={{ background: 'rgba(255,64,96,0.12)', color: '#FF6080', border: '1px solid rgba(255,64,96,0.3)' }}
                   >
-                    Ver ao vivo ↗
-                  </a>
-                )}
+                    {deleting ? <><span className="spinner" style={{ width: '0.75rem', height: '0.75rem', borderWidth: '2px' }} /> Excluindo...</> : '🗑 Excluir'}
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col gap-4">
@@ -392,6 +429,18 @@ export function DrawTab({ events, tournaments, apiRequest, onRefresh, showMsg }:
                           }}>
                             {m.status === 'completed' ? 'Concluída' : 'Agendada'}
                           </span>
+                          {m.status !== 'completed' && (
+                            <a
+                              href={`/matches/${m.id}/score`}
+                              style={{
+                                fontSize: '0.65rem', fontWeight: 700, padding: '0.2rem 0.5rem', borderRadius: '4px',
+                                background: 'rgba(180,255,61,0.12)', color: 'var(--accent-lime)',
+                                border: '1px solid rgba(180,255,61,0.3)', textDecoration: 'none', whiteSpace: 'nowrap',
+                              }}
+                            >
+                              Lançar Placar →
+                            </a>
+                          )}
                         </div>
                       ))}
                     </div>

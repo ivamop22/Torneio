@@ -44,6 +44,15 @@ function teamLabel(team: any): string {
 
 @Injectable()
 export class DrawsService {
+  async resetBracket(eventId: string) {
+    await prisma.match.deleteMany({ where: { eventId } });
+    await prisma.eventGroupStanding.deleteMany({ where: { eventGroup: { eventId } } });
+    await prisma.eventGroup.deleteMany({ where: { eventId } });
+    await prisma.draw.deleteMany({ where: { eventId } });
+    await prisma.event.update({ where: { id: eventId }, data: { status: 'registration' } });
+    return { success: true, message: 'Chaveamento excluído com sucesso.' };
+  }
+
   async generateGroupKnockout(eventId: string, groupCount = 2) {
     const teams = await prisma.team.findMany({
       where: { eventId, status: 'accepted', deletedAt: null },

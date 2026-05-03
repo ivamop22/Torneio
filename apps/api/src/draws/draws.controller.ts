@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { DrawsService } from './draws.service';
 import { Public } from '../auth/roles.decorator';
@@ -94,6 +94,11 @@ export class DrawsController {
   @Get('events/:eventId/bracket')
   async getBracket(@Param('eventId') eventId: string) {
     return this.drawsService.getBracketData(eventId);
+  }
+
+  @Delete('events/:eventId/bracket')
+  async deleteBracket(@Param('eventId') eventId: string) {
+    return this.drawsService.resetBracket(eventId);
   }
 
   @Put('events/:eventId/bracket/manual')
