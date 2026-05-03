@@ -49,7 +49,7 @@ export class DrawsService {
     await prisma.eventGroupStanding.deleteMany({ where: { eventGroup: { eventId } } });
     await prisma.eventGroup.deleteMany({ where: { eventId } });
     await prisma.draw.deleteMany({ where: { eventId } });
-    await prisma.event.update({ where: { id: eventId }, data: { status: 'registration' } });
+    await prisma.event.update({ where: { id: eventId }, data: { status: 'open' } });
     return { success: true, message: 'Chaveamento excluído com sucesso.' };
   }
 
