@@ -2,20 +2,19 @@
 import { use, useEffect, useState } from 'react';
 import { useAuth } from '../../../../../contexts/AuthContext';
 
-type SetEntry = { setNumber: number; team1Games: number; team2Games: number; tieBreak1?: string; tieBreak2?: string };
-
+type SetEntry = { setNumber: number; team1Games: number; team2Games: number };
 type PageProps = { params: Promise<{ id: string }> };
 
 export default function ScorePage({ params }: PageProps) {
   const { id } = use(params);
   const { authFetch } = useAuth();
-  const [match, setMatch]         = useState<any>(null);
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
-  const [msg, setMsg]             = useState('');
-  const [msgType, setMsgType]     = useState<'ok' | 'err'>('ok');
-  const [winnerTeamId, setWinner] = useState<string>('');
-  const [sets, setSets]           = useState<SetEntry[]>([
+  const [match, setMatch]   = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
+  const [msg, setMsg]         = useState('');
+  const [msgType, setMsgType] = useState<'ok' | 'err'>('ok');
+  const [sets, setSets]       = useState<SetEntry[]>([
     { setNumber: 1, team1Games: 0, team2Games: 0 },
     { setNumber: 2, team1Games: 0, team2Games: 0 },
   ]);
@@ -30,32 +29,39 @@ export default function ScorePage({ params }: PageProps) {
             setNumber:  s.setNumber,
             team1Games: s.team1Games ?? 0,
             team2Games: s.team2Games ?? 0,
-            tieBreak1:  s.tieBreakTeam1 != null ? String(s.tieBreakTeam1) : '',
-            tieBreak2:  s.tieBreakTeam2 != null ? String(s.tieBreakTeam2) : '',
           })));
         }
-        if (data.winnerTeamId) setWinner(data.winnerTeamId);
+        if (data.status === 'completed') setSaved(true);
       })
       .catch(() => { setMsg('Partida não encontrada'); setMsgType('err'); })
       .finally(() => setLoading(false));
   }, [id, authFetch]);
 
-  function updateSet(i: number, field: keyof SetEntry, value: string | number) {
-    setSets(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s));
+  // Auto-compute winner from set scores
+  const t1Sets = sets.filter(s => s.team1Games > s.team2Games).length;
+  const t2Sets = sets.filter(s => s.team2Games > s.team1Games).length;
+  const winnerTeamId = t1Sets > t2Sets ? match?.team1Id : t2Sets > t1Sets ? match?.team2Id : null;
+
+  function updateGames(i: number, field: 'team1Games' | 'team2Games', raw: string) {
+    const n = Math.max(0, parseInt(raw) || 0);
+    setSets(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: n } : s));
+    setSaved(false);
   }
 
   function addSet() {
     setSets(prev => [...prev, { setNumber: prev.length + 1, team1Games: 0, team2Games: 0 }]);
+    setSaved(false);
   }
 
   function removeSet(i: number) {
+    if (sets.length <= 1) return;
     setSets(prev => prev.filter((_, idx) => idx !== i).map((s, idx) => ({ ...s, setNumber: idx + 1 })));
+    setSaved(false);
   }
 
-  async function handleSubmit(e: { preventDefault(): void }) {
-    e.preventDefault();
+  async function handleSave() {
     if (!winnerTeamId) {
-      setMsg('Selecione o time vencedor antes de salvar.');
+      setMsg('Resultado indefinido — uma dupla deve ganhar mais sets.');
       setMsgType('err');
       return;
     }
@@ -63,29 +69,23 @@ export default function ScorePage({ params }: PageProps) {
     setMsg('');
     try {
       const loserTeamId = winnerTeamId === match?.team1Id ? match?.team2Id : match?.team1Id;
-      const payload = {
-        winnerTeamId,
-        loserTeamId,
-        sets: sets.map(s => ({
-          setNumber:    s.setNumber,
-          team1Games:   Number(s.team1Games),
-          team2Games:   Number(s.team2Games),
-          tieBreakTeam1: s.tieBreak1 !== '' && s.tieBreak1 != null ? Number(s.tieBreak1) : null,
-          tieBreakTeam2: s.tieBreak2 !== '' && s.tieBreak2 != null ? Number(s.tieBreak2) : null,
-        })),
-      };
       const res = await authFetch(`/matches/${id}/result`, {
         method: 'PATCH',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          winnerTeamId,
+          loserTeamId,
+          sets: sets.map(s => ({ setNumber: s.setNumber, team1Games: s.team1Games, team2Games: s.team2Games })),
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message ?? `Erro ${res.status}`);
       }
-      setMsg('Resultado salvo! Chaveamento atualizado automaticamente.');
+      setMsg('Resultado salvo! Chaveamento atualizado.');
       setMsgType('ok');
+      setSaved(true);
     } catch (err: any) {
-      setMsg(err.message ?? 'Erro ao salvar placar');
+      setMsg(err.message ?? 'Erro ao salvar resultado');
       setMsgType('err');
     } finally {
       setSaving(false);
@@ -94,149 +94,149 @@ export default function ScorePage({ params }: PageProps) {
 
   const team1Name = match?.team1
     ? `${match.team1.player1?.fullName ?? '?'}${match.team1.player2 ? ' / ' + match.team1.player2.fullName : ''}`
-    : 'Time 1';
+    : 'Dupla 1';
   const team2Name = match?.team2
     ? `${match.team2.player1?.fullName ?? '?'}${match.team2.player2 ? ' / ' + match.team2.player2.fullName : ''}`
-    : 'Time 2';
+    : 'Dupla 2';
+
+  if (loading) return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <span className="spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
+    </div>
+  );
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
-      <div style={{ width: '100%', maxWidth: '520px' }}>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <a href="/" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textDecoration: 'none' }}>← Voltar ao painel</a>
-          <h1 style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0.5rem 0 0.25rem' }}>
-            Lançamento de Placar
-          </h1>
-          {match && <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0 }}>Partida #{match.matchNumber} · {match.roundName}</p>}
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', padding: '1.5rem 1rem' }}>
+      <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+        {/* Back */}
+        <a href="/" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
+          ← Voltar ao painel
+        </a>
+
+        {/* Title */}
+        <h1 style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+          {match?.roundName ?? 'Lançar Resultado'}
+          {match?.matchNumber ? <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '1.1rem' }}> — Partida {match.matchNumber}</span> : null}
+        </h1>
+
+        {/* Team cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '0.625rem', alignItems: 'center' }}>
+          <div style={{
+            background: 'var(--bg-surface)',
+            border: `2px solid ${winnerTeamId === match?.team1Id ? 'rgba(180,255,61,0.5)' : 'var(--border)'}`,
+            borderRadius: '0.75rem', padding: '1rem', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.375rem' }}>DUPLA 1</div>
+            <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.35 }}>{team1Name}</div>
+          </div>
+          <div style={{ fontWeight: 800, color: 'var(--text-faint)', fontSize: '0.85rem', padding: '0 0.25rem' }}>VS</div>
+          <div style={{
+            background: 'var(--bg-surface)',
+            border: `2px solid ${winnerTeamId === match?.team2Id ? 'rgba(180,255,61,0.5)' : 'var(--border)'}`,
+            borderRadius: '0.75rem', padding: '1rem', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.375rem' }}>DUPLA 2</div>
+            <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.35 }}>{team2Name}</div>
+          </div>
         </div>
 
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '3rem 0' }}>
-            <span className="spinner" style={{ width: '2rem', height: '2rem', borderWidth: '3px' }} />
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            {/* Sets */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem', marginBottom: '1.25rem' }}>
-              {sets.map((s, i) => (
-                <div key={i} className="card" style={{ padding: '1.25rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '1rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      SET {s.setNumber}
-                    </span>
-                    {sets.length > 1 && (
-                      <button type="button" onClick={() => removeSet(i)} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-red)' }}>
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.5rem 1fr', gap: '0.75rem', alignItems: 'end' }}>
-                    <div>
-                      <label className="label" style={{ textAlign: 'center' }}>{team1Name}</label>
-                      <input
-                        className="input"
-                        type="number"
-                        min="0"
-                        max="99"
-                        value={s.team1Games}
-                        onChange={e => updateSet(i, 'team1Games', Number(e.target.value))}
-                        style={{ textAlign: 'center', fontFamily: 'Barlow Condensed, sans-serif', fontSize: '1.5rem', fontWeight: 700 }}
-                      />
-                    </div>
-                    <div style={{ textAlign: 'center', fontWeight: 800, color: 'var(--text-faint)', paddingBottom: '0.6rem' }}>–</div>
-                    <div>
-                      <label className="label" style={{ textAlign: 'center' }}>{team2Name}</label>
-                      <input
-                        className="input"
-                        type="number"
-                        min="0"
-                        max="99"
-                        value={s.team2Games}
-                        onChange={e => updateSet(i, 'team2Games', Number(e.target.value))}
-                        style={{ textAlign: 'center', fontFamily: 'Barlow Condensed, sans-serif', fontSize: '1.5rem', fontWeight: 700 }}
-                      />
-                    </div>
-                  </div>
-                  {/* Tie-break */}
-                  <div style={{ marginTop: '0.75rem' }}>
-                    <label className="label">Tie-break (opcional)</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.5rem 1fr', gap: '0.75rem', alignItems: 'center' }}>
-                      <input className="input" type="number" min="0" placeholder="—" value={s.tieBreak1 ?? ''} onChange={e => updateSet(i, 'tieBreak1', e.target.value)} style={{ textAlign: 'center' }} />
-                      <div style={{ textAlign: 'center', fontWeight: 800, color: 'var(--text-faint)' }}>–</div>
-                      <input className="input" type="number" min="0" placeholder="—" value={s.tieBreak2 ?? ''} onChange={e => updateSet(i, 'tieBreak2', e.target.value)} style={{ textAlign: 'center' }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={addSet}
-              className="btn btn-secondary"
-              style={{ width: '100%', marginBottom: '1.25rem' }}
-            >
-              + Adicionar Set
-            </button>
-
-            {/* Winner selection */}
-            <div className="card" style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
-              <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 0.875rem' }}>
-                Time Vencedor *
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {[{ id: match?.team1Id, name: team1Name }, { id: match?.team2Id, name: team2Name }].map(team => (
-                  <label
-                    key={team.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.75rem',
-                      padding: '0.875rem 1rem',
-                      borderRadius: 'var(--radius-md)',
-                      border: `2px solid ${winnerTeamId === team.id ? 'var(--accent-green, #00C850)' : 'var(--border-subtle)'}`,
-                      background: winnerTeamId === team.id ? 'rgba(0,200,80,0.08)' : 'transparent',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="winner"
-                      value={team.id ?? ''}
-                      checked={winnerTeamId === team.id}
-                      onChange={() => setWinner(team.id ?? '')}
-                      style={{ accentColor: 'var(--accent-green, #00C850)' }}
-                    />
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>{team.name}</span>
-                    {winnerTeamId === team.id && (
-                      <span style={{ marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-green, #00C850)', textTransform: 'uppercase' }}>
-                        Vencedor
-                      </span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {msg && (
-              <div style={{
-                padding: '0.75rem 1rem',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '0.875rem',
-                marginBottom: '1rem',
-                background: msgType === 'ok' ? 'rgba(0,200,80,0.1)' : 'rgba(255,64,96,0.1)',
-                border: `1px solid ${msgType === 'ok' ? 'rgba(0,200,80,0.25)' : 'rgba(255,64,96,0.25)'}`,
-                color: msgType === 'ok' ? '#00C850' : '#FF6080',
+        {/* Set rows */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {sets.map((s, i) => {
+            const t1Win = s.team1Games > s.team2Games;
+            const t2Win = s.team2Games > s.team1Games;
+            return (
+              <div key={i} style={{
+                display: 'grid', gridTemplateColumns: '3.5rem 1fr 2rem 1fr auto',
+                gap: '0.5rem', alignItems: 'center',
+                background: 'var(--bg-surface)', borderRadius: '0.625rem', padding: '0.75rem 1rem',
               }}>
-                {msg}
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  Set {s.setNumber}
+                </span>
+                <input
+                  type="number" min="0" max="99"
+                  value={s.team1Games}
+                  onChange={e => updateGames(i, 'team1Games', e.target.value)}
+                  style={{
+                    background: t1Win ? 'rgba(180,255,61,0.15)' : 'var(--bg-elevated)',
+                    border: `2px solid ${t1Win ? 'rgba(180,255,61,0.45)' : 'var(--border)'}`,
+                    borderRadius: '0.5rem',
+                    color: t1Win ? 'var(--accent-lime)' : 'var(--text-primary)',
+                    fontWeight: 800, fontSize: '1.35rem', textAlign: 'center',
+                    padding: '0.5rem 0.25rem', width: '100%', outline: 'none',
+                  }}
+                />
+                <span style={{ textAlign: 'center', color: 'var(--text-faint)', fontWeight: 700 }}>×</span>
+                <input
+                  type="number" min="0" max="99"
+                  value={s.team2Games}
+                  onChange={e => updateGames(i, 'team2Games', e.target.value)}
+                  style={{
+                    background: t2Win ? 'rgba(180,255,61,0.15)' : 'var(--bg-elevated)',
+                    border: `2px solid ${t2Win ? 'rgba(180,255,61,0.45)' : 'var(--border)'}`,
+                    borderRadius: '0.5rem',
+                    color: t2Win ? 'var(--accent-lime)' : 'var(--text-primary)',
+                    fontWeight: 800, fontSize: '1.35rem', textAlign: 'center',
+                    padding: '0.5rem 0.25rem', width: '100%', outline: 'none',
+                  }}
+                />
+                {sets.length > 2 ? (
+                  <button
+                    type="button" onClick={() => removeSet(i)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: '0.9rem', padding: '0.25rem', lineHeight: 1 }}
+                    title="Remover set"
+                  >✕</button>
+                ) : <span />}
               </div>
-            )}
+            );
+          })}
+        </div>
 
-            <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={saving}>
-              {saving ? <><span className="spinner" /> Salvando...</> : '💾 Salvar Resultado'}
-            </button>
-          </form>
+        {/* Winner indicator */}
+        {winnerTeamId && (
+          <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-lime)', letterSpacing: '0.04em' }}>
+            Vencedor: {winnerTeamId === match?.team1Id ? team1Name : team2Name}
+          </div>
+        )}
+
+        {/* Buttons */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.625rem' }}>
+          <button type="button" onClick={addSet} className="btn btn-secondary">
+            + Adicionar Set
+          </button>
+          <button
+            type="button" onClick={handleSave}
+            disabled={saving || !winnerTeamId}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+              fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, fontSize: '1rem',
+              letterSpacing: '0.05em', borderRadius: '0.625rem', border: 'none', cursor: 'pointer',
+              padding: '0.75rem 1rem', transition: 'all 0.15s',
+              background: saved ? 'rgba(180,255,61,0.15)' : winnerTeamId ? 'var(--accent-lime)' : 'var(--bg-elevated)',
+              color: saved ? 'var(--accent-lime)' : winnerTeamId ? '#050810' : 'var(--text-faint)',
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            {saving
+              ? <><span className="spinner" style={{ borderTopColor: '#050810' }} /> Salvando...</>
+              : saved ? '✅ Salvo'
+              : '✅ Salvar Resultado'
+            }
+          </button>
+        </div>
+
+        {/* Message */}
+        {msg && (
+          <div style={{
+            padding: '0.75rem 1rem', borderRadius: '0.5rem', fontSize: '0.875rem',
+            background: msgType === 'ok' ? 'rgba(180,255,61,0.1)' : 'rgba(255,64,96,0.1)',
+            border: `1px solid ${msgType === 'ok' ? 'rgba(180,255,61,0.25)' : 'rgba(255,64,96,0.25)'}`,
+            color: msgType === 'ok' ? 'var(--accent-lime)' : '#FF6080',
+          }}>
+            {msg}
+          </div>
         )}
       </div>
     </div>
