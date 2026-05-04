@@ -1,5 +1,6 @@
 'use client';
 import { use, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../../../contexts/AuthContext';
 
 type SetEntry = { setNumber: number; team1Games: number; team2Games: number };
@@ -8,6 +9,7 @@ type PageProps = { params: Promise<{ id: string }> };
 export default function ScorePage({ params }: PageProps) {
   const { id } = use(params);
   const { authFetch } = useAuth();
+  const router = useRouter();
   const [match, setMatch]   = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -81,9 +83,10 @@ export default function ScorePage({ params }: PageProps) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message ?? `Erro ${res.status}`);
       }
-      setMsg('Resultado salvo! Chaveamento atualizado.');
+      setMsg('Resultado salvo! Redirecionando...');
       setMsgType('ok');
       setSaved(true);
+      setTimeout(() => router.push('/?tab=chaveamento'), 1500);
     } catch (err: any) {
       setMsg(err.message ?? 'Erro ao salvar resultado');
       setMsgType('err');
@@ -110,9 +113,12 @@ export default function ScorePage({ params }: PageProps) {
       <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
         {/* Back */}
-        <a href="/" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
-          ← Voltar ao painel
-        </a>
+        <button
+          onClick={() => router.push('/?tab=chaveamento')}
+          style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
+        >
+          ← Voltar ao chaveamento
+        </button>
 
         {/* Title */}
         <h1 style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>

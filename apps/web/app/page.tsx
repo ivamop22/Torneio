@@ -28,7 +28,11 @@ const TABS: { key: Tab; icon: string; label: string }[] = [
 
 export default function AdminPage() {
   const { user, token, logout, authFetch } = useAuth();
-  const [tab, setTab]             = useState<Tab>('torneios');
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === 'undefined') return 'torneios';
+    const t = new URLSearchParams(window.location.search).get('tab') as Tab;
+    return (['torneios', 'eventos', 'jogadores', 'duplas', 'chaveamento'] as Tab[]).includes(t) ? t : 'torneios';
+  });
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [events, setEvents]       = useState<EventItem[]>([]);
   const [players, setPlayers]     = useState<Player[]>([]);
