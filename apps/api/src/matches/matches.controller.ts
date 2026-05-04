@@ -1,9 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { DrawsService } from '../draws/draws.service';
 import { Public } from '../auth/roles.decorator';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+import type { Response } from 'express';
 
 @Controller('matches')
 export class MatchesController {
@@ -15,7 +14,10 @@ export class MatchesController {
     @Query('eventId') eventId?: string,
     @Query('groupId') groupId?: string,
     @Query('status') status?: string,
+    @Res({ passthrough: true }) res?: Response,
   ) {
+    // Live match data: 15-second cache so ao-vivo pollers share results across clients
+    res?.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=30');
     return prisma.match.findMany({
       where: {
         ...(eventId ? { eventId } : {}),
@@ -80,22 +82,20 @@ export class MatchesController {
       },
     });
 
-    // Salvar sets (se informados)
+    // Salvar sets (se informados) — deleteMany + createMany = 2 queries instead of 1 + N
     if (body.sets?.length) {
       await prisma.matchSet.deleteMany({ where: { matchId: id } });
-      for (const set of body.sets) {
-        await prisma.matchSet.create({
-          data: {
-            matchId: id,
-            setNumber: set.setNumber,
-            team1Games: set.team1Games,
-            team2Games: set.team2Games,
-            tieBreakTeam1: set.tieBreakTeam1 ?? null,
-            tieBreakTeam2: set.tieBreakTeam2 ?? null,
-            isMatchTiebreak: set.isMatchTiebreak ?? false,
-          },
-        });
-      }
+      await prisma.matchSet.createMany({
+        data: body.sets.map((set) => ({
+          matchId: id,
+          setNumber: set.setNumber,
+          team1Games: set.team1Games,
+          team2Games: set.team2Games,
+          tieBreakTeam1: set.tieBreakTeam1 ?? null,
+          tieBreakTeam2: set.tieBreakTeam2 ?? null,
+          isMatchTiebreak: set.isMatchTiebreak ?? false,
+        })),
+      });
     }
 
     // 🤖 MOTOR: Auto-avançar vencedor

@@ -7,11 +7,11 @@ import {
   Param,
   Post,
   Request,
+  Res,
 } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
 import { Public, Roles } from '../auth/roles.decorator';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+import type { Response } from 'express';
 
 const MODALITIES = [
   { gender: 'male', label: 'Masculino' },
@@ -25,7 +25,9 @@ const CLASS_LEVELS = ['A', 'B', 'C', 'D'];
 export class TournamentsController {
   @Public()
   @Get()
-  async findAll() {
+  async findAll(@Res({ passthrough: true }) res: Response) {
+    // Tournament list is public — 60-second cache; stale-while-revalidate reduces visible latency
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
     return prisma.tournament.findMany({
       where: { deleted_at: null },
       orderBy: { createdAt: 'desc' },

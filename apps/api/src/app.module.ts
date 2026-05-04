@@ -1,7 +1,6 @@
 import { Module, OnApplicationBootstrap } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import * as bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
 import { TournamentsController } from './tournaments/tournaments.controller';
 import { EventsController } from './events/events.controller';
 import { PlayersController } from './players/players.controller';
@@ -13,8 +12,7 @@ import { DrawsService } from './draws/draws.service';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { SuperuserModule } from './superuser/superuser.module';
-
-const prisma = new PrismaClient();
+import { prisma } from './lib/prisma';
 
 @Module({
   imports: [AuthModule, SuperuserModule],

@@ -180,39 +180,71 @@ export class PlayersController {
   @HttpCode(200)
   async bulkDelete(@Body() body: { ids: string[] }) {
     const ids = Array.isArray(body?.ids) ? body.ids : [];
-    const skipped: string[] = [];
-    const deleted: string[] = [];
+    if (ids.length === 0) return { deleted: 0, skipped: 0, skippedIds: [] };
 
-    for (const id of ids) {
-      const player = await prisma.player.findFirst({
-        where: { id, deletedAt: null },
-      });
+    // 1) Fetch only active players from the requested set (1 query)
+    const existingPlayers = await prisma.player.findMany({
+      where: { id: { in: ids }, deletedAt: null },
+      select: { id: true },
+    });
+    const existingIds = new Set(existingPlayers.map((p) => p.id));
 
-      if (!player) continue;
+    // 2) Find all teams that include any of these players (1 query)
+    const teamsWithPlayers = await prisma.team.findMany({
+      where: {
+        OR: [
+          { player1Id: { in: ids } },
+          { player2Id: { in: ids } },
+        ],
+      },
+      select: { id: true, player1Id: true, player2Id: true },
+    });
+    const teamIds = teamsWithPlayers.map((t) => t.id);
 
-      const activeMatch = await prisma.match.findFirst({
-        where: {
-          OR: [
-            { team1: { OR: [{ player1Id: id }, { player2Id: id }] } },
-            { team2: { OR: [{ player1Id: id }, { player2Id: id }] } },
-          ],
-          status: { in: ['scheduled', 'live', 'completed'] },
-        },
-      });
+    // 3) Find which teams have active/completed matches (1 query)
+    const blockedTeams = teamIds.length
+      ? await prisma.match.findMany({
+          where: {
+            OR: [{ team1Id: { in: teamIds } }, { team2Id: { in: teamIds } }],
+            status: { in: ['scheduled', 'live', 'completed'] },
+          },
+          select: { team1Id: true, team2Id: true },
+        })
+      : [];
 
-      if (activeMatch) {
-        skipped.push(id);
-        continue;
-      }
-
-      await prisma.player.update({
-        where: { id },
-        data: { deletedAt: new Date(), active: false },
-      });
-      deleted.push(id);
+    const blockedTeamIdSet = new Set<string>();
+    for (const m of blockedTeams) {
+      if (m.team1Id) blockedTeamIdSet.add(m.team1Id);
+      if (m.team2Id) blockedTeamIdSet.add(m.team2Id);
     }
 
-    return { deleted: deleted.length, skipped: skipped.length, skippedIds: skipped };
+    // Map player -> their teams, to determine if the player is blocked
+    const blockedPlayerIds = new Set<string>();
+    for (const team of teamsWithPlayers) {
+      if (blockedTeamIdSet.has(team.id)) {
+        if (team.player1Id) blockedPlayerIds.add(team.player1Id);
+        if (team.player2Id) blockedPlayerIds.add(team.player2Id);
+      }
+    }
+
+    const skipped: string[] = [];
+    const toDelete: string[] = [];
+
+    for (const id of ids) {
+      if (!existingIds.has(id)) continue;
+      if (blockedPlayerIds.has(id)) { skipped.push(id); continue; }
+      toDelete.push(id);
+    }
+
+    // 4) Soft-delete all eligible players in one query
+    if (toDelete.length) {
+      await prisma.player.updateMany({
+        where: { id: { in: toDelete } },
+        data: { deletedAt: new Date(), active: false },
+      });
+    }
+
+    return { deleted: toDelete.length, skipped: skipped.length, skippedIds: skipped };
   }
 
   @Delete(':id')

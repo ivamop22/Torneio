@@ -1,9 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Body, Controller, Delete, Get, Header, Param, Post, Put, Query, Res } from '@nestjs/common';
 import { DrawsService } from './draws.service';
 import { Public } from '../auth/roles.decorator';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+import type { Response } from 'express';
 
 @Controller()
 export class DrawsController {
@@ -92,7 +91,9 @@ export class DrawsController {
 
   @Public()
   @Get('events/:eventId/bracket')
-  async getBracket(@Param('eventId') eventId: string) {
+  async getBracket(@Param('eventId') eventId: string, @Res({ passthrough: true }) res: Response) {
+    // Live bracket: 30-second public cache — balances freshness vs. DB load
+    res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
     return this.drawsService.getBracketData(eventId);
   }
 
@@ -112,7 +113,9 @@ export class DrawsController {
 
   @Public()
   @Get('ranking')
-  async getRanking(@Query('category') category?: string) {
+  async getRanking(@Query('category') category?: string, @Res({ passthrough: true }) res: Response) {
+    // Ranking is relatively static — 5-minute cache
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
     return this.drawsService.getRanking(category);
   }
 }

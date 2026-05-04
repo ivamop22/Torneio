@@ -10,10 +10,8 @@ import {
   Request,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 @Roles('superuser')
 @Controller('superuser')

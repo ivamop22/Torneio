@@ -70,6 +70,9 @@ model Tournament {
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deleted_at      DateTime? @db.Timestamptz(6)
 
+  // Soft-delete filter is used on every list query
+  @@index([deleted_at], map: "idx_tournaments_deleted_at")
+  @@index([status, deleted_at], map: "idx_tournaments_status")
   @@map("tournaments")
 }
 
@@ -154,6 +157,8 @@ model Player {
   teamsAsPlayer2 Team[] @relation("TeamPlayer2")
 
   @@index([eligibilityStatus], map: "idx_players_eligibility_status")
+  // Soft-delete filter runs on every player list/lookup
+  @@index([deletedAt], map: "idx_players_deleted_at")
   @@map("players")
 }
 
@@ -194,6 +199,8 @@ model Team {
 
   @@unique([eventId, player1Id, player2Id])
   @@index([eventId, status], map: "idx_teams_event_status")
+  // Soft-delete filter used in most team queries
+  @@index([deletedAt], map: "idx_teams_deleted_at")
   @@map("teams")
 }
 
@@ -315,6 +322,10 @@ model Match {
 
   @@index([courtId, scheduledAt], map: "idx_matches_court_time")
   @@index([eventId, status], map: "idx_matches_event_status")
+  // drawId is used when fetching knockout matches by draw
+  @@index([drawId], map: "idx_matches_draw_id")
+  // groupId is filtered on every group-phase query
+  @@index([groupId], map: "idx_matches_group_id")
   @@map("matches")
 }
 

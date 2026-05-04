@@ -80,6 +80,7 @@ export default function TournamentDetailPage({ params }: PageProps) {
       setError('');
 
       try {
+        // Step 1: fetch tournament list (1 request — no way around it without a slug endpoint)
         const res = await fetch(`${API_URL}/tournaments`);
         if (!res.ok) throw new Error('Erro ao carregar torneios.');
 
@@ -96,12 +97,22 @@ export default function TournamentDetailPage({ params }: PageProps) {
 
         setTournament(selectedTournament);
 
-        const eventsRes = await fetch(`${API_URL}/events?tournamentId=${selectedTournament.id}`);
+        // Step 2: fire events + ranking in parallel now that we have the tournament ID
+        const [eventsRes, rankingRes] = await Promise.all([
+          fetch(`${API_URL}/events?tournamentId=${selectedTournament.id}`),
+          fetch(`${API_URL}/ranking`),
+        ]);
+
         if (!eventsRes.ok) throw new Error('Erro ao carregar eventos.');
 
-        const eventsData = await eventsRes.json();
+        const [eventsData, rankingData] = await Promise.all([
+          eventsRes.json(),
+          rankingRes.ok ? rankingRes.json() : Promise.resolve([]),
+        ]);
+
         const tournamentEvents = Array.isArray(eventsData) ? eventsData : [];
         setEvents(tournamentEvents);
+        setRanking(Array.isArray(rankingData) ? rankingData : []);
 
         if (tournamentEvents.length > 0) {
           setEventId(tournamentEvents[0].id);
@@ -160,6 +171,7 @@ export default function TournamentDetailPage({ params }: PageProps) {
       setRanking([]);
     }
   }, []);
+  // Note: loadRanking is available for manual refresh from tab interactions
 
   const loadPerformance = useCallback(async (playerId: string) => {
     if (!playerId) return;
@@ -171,8 +183,8 @@ export default function TournamentDetailPage({ params }: PageProps) {
 
   useEffect(() => {
     loadBracket();
-    loadRanking();
-  }, [loadBracket, loadRanking]);
+    // ranking is already fetched in the tournament bootstrap effect above
+  }, [loadBracket]);
 
   useEffect(() => {
     if (!eventId) return;

@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import * as compression from 'compression';
 
 function getAllowedOrigins() {
   return [
@@ -14,6 +15,9 @@ function getAllowedOrigins() {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Compress all responses >= 1kb — cuts wire size ~70% for JSON payloads
+  app.use(compression({ threshold: 1024 }));
 
   app.enableCors({
     origin: (origin: string | undefined, cb: (err: Error | null, ok?: boolean) => void) => {

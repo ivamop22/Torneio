@@ -11,10 +11,8 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
 import { Public } from './roles.decorator';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 @Controller('auth')
 export class AuthController {

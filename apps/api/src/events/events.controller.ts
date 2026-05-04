@@ -1,8 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Request } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 @Controller('events')
 export class EventsController {

@@ -90,6 +90,7 @@ export class DrawsService {
 
     const createdGroups: any[] = [];
 
+    // Build all group records first, then batch-insert standings and matches
     for (let g = 0; g < groupCount; g++) {
       const groupName = String.fromCharCode(65 + g);
 
@@ -97,30 +98,39 @@ export class DrawsService {
         data: { eventId, name: `Grupo ${groupName}`, position: g + 1 },
       });
 
-      for (const team of groups[g]) {
-        await prisma.eventGroupStanding.create({
-          data: { eventGroupId: group.id, teamId: team.id },
-        });
-      }
+      // Batch-insert all standings for this group (1 query per group instead of N)
+      await prisma.eventGroupStanding.createMany({
+        data: groups[g].map((team) => ({ eventGroupId: group.id, teamId: team.id })),
+      });
 
-      let matchNum = 1;
+      // Batch-insert all round-robin matches for this group (1 query per group instead of N)
       const groupTeams = groups[g];
+      const matchRows: {
+        eventId: string;
+        drawId: string;
+        groupId: string;
+        roundName: string;
+        matchNumber: number;
+        team1Id: string;
+        team2Id: string;
+        status: string;
+      }[] = [];
+      let matchNum = 1;
       for (let i = 0; i < groupTeams.length; i++) {
         for (let j = i + 1; j < groupTeams.length; j++) {
-          await prisma.match.create({
-            data: {
-              eventId,
-              drawId: draw.id,
-              groupId: group.id,
-              roundName: `Grupos - ${groupName}`,
-              matchNumber: matchNum++,
-              team1Id: groupTeams[i].id,
-              team2Id: groupTeams[j].id,
-              status: 'scheduled',
-            },
+          matchRows.push({
+            eventId,
+            drawId: draw.id,
+            groupId: group.id,
+            roundName: `Grupos - ${groupName}`,
+            matchNumber: matchNum++,
+            team1Id: groupTeams[i].id,
+            team2Id: groupTeams[j].id,
+            status: 'scheduled',
           });
         }
       }
+      await prisma.match.createMany({ data: matchRows });
 
       createdGroups.push({ group, teams: groupTeams });
     }
@@ -216,25 +226,27 @@ export class DrawsService {
         return sb.gamesFor - sa.gamesFor;
       });
 
-    for (let i = 0; i < sorted.length; i++) {
-      const s = sorted[i];
-      const st = stats[s.teamId];
-      await prisma.eventGroupStanding.update({
-        where: { id: s.id },
-        data: {
-          played: st.played,
-          wins: st.wins,
-          losses: st.losses,
-          walkovers: st.walkovers,
-          setsFor: st.setsFor,
-          setsAgainst: st.setsAgainst,
-          gamesFor: st.gamesFor,
-          gamesAgainst: st.gamesAgainst,
-          points: st.points,
-          rankPosition: i + 1,
-        },
-      });
-    }
+    // Batch all standing updates into a single transaction (eliminates N individual round-trips)
+    await prisma.$transaction(
+      sorted.map((s, i) => {
+        const st = stats[s.teamId];
+        return prisma.eventGroupStanding.update({
+          where: { id: s.id },
+          data: {
+            played: st.played,
+            wins: st.wins,
+            losses: st.losses,
+            walkovers: st.walkovers,
+            setsFor: st.setsFor,
+            setsAgainst: st.setsAgainst,
+            gamesFor: st.gamesFor,
+            gamesAgainst: st.gamesAgainst,
+            points: st.points,
+            rankPosition: i + 1,
+          },
+        });
+      }),
+    );
 
     return sorted.map((s, i) => ({ ...stats[s.teamId], teamId: s.teamId, rankPosition: i + 1 }));
   }
@@ -279,7 +291,17 @@ export class DrawsService {
     const seededTeams = crossBracketSeed(advancingTeams, groups.length, advancePerGroup);
 
     let matchCounter = 1;
-    const createdMatches: any[] = [];
+
+    // Collect all matches across all rounds then batch-insert (1 query instead of N)
+    const matchRows: {
+      eventId: string;
+      drawId: string | null;
+      roundName: string;
+      matchNumber: number;
+      team1Id: string | null;
+      team2Id: string | null;
+      status: string;
+    }[] = [];
 
     for (let r = 0; r < rounds.length; r++) {
       const roundName = getRoundName(rounds.length, r);
@@ -289,21 +311,25 @@ export class DrawsService {
         const team1Id = r === 0 ? (seededTeams[m * 2] ?? null) : null;
         const team2Id = r === 0 ? (seededTeams[m * 2 + 1] ?? null) : null;
 
-        const match = await prisma.match.create({
-          data: {
-            eventId,
-            drawId: draw?.id ?? null,
-            roundName,
-            matchNumber: matchCounter++,
-            team1Id,
-            team2Id,
-            status: 'scheduled',
-          },
+        matchRows.push({
+          eventId,
+          drawId: draw?.id ?? null,
+          roundName,
+          matchNumber: matchCounter++,
+          team1Id,
+          team2Id,
+          status: 'scheduled',
         });
-        createdMatches.push(match);
       }
     }
 
+    await prisma.match.createMany({ data: matchRows });
+
+    // Return the created matches so callers can use them
+    const createdMatches = await prisma.match.findMany({
+      where: { eventId, groupId: null },
+      orderBy: { matchNumber: 'asc' },
+    });
     return createdMatches;
   }
 
@@ -431,75 +457,113 @@ export class DrawsService {
   }
 
   async getBracketData(eventId: string) {
-    const [event, groups, knockoutMatches] = await Promise.all([
+    // --- Step 1: fetch structural data in parallel (3 queries) ---
+    const [event, groups, allMatches] = await Promise.all([
       prisma.event.findUnique({ where: { id: eventId } }),
       prisma.eventGroup.findMany({ where: { eventId }, orderBy: { position: 'asc' } }),
       prisma.match.findMany({
-        where: { eventId, groupId: null },
+        where: { eventId },
         orderBy: { matchNumber: 'asc' },
       }),
     ]);
 
     if (!event) throw new NotFoundException('Evento nao encontrado.');
 
-    const enrichTeam = async (teamId: string | null) => {
+    const knockoutMatches = allMatches.filter((m) => m.groupId === null);
+    const groupMatchMap = new Map<string, typeof allMatches>();
+    for (const m of allMatches) {
+      if (m.groupId) {
+        if (!groupMatchMap.has(m.groupId)) groupMatchMap.set(m.groupId, []);
+        groupMatchMap.get(m.groupId)!.push(m);
+      }
+    }
+
+    // --- Step 2: fetch all standings for all groups (1 query) ---
+    const groupIds = groups.map((g) => g.id);
+    const [allStandings, allMatchSets] = await Promise.all([
+      groupIds.length
+        ? prisma.eventGroupStanding.findMany({
+            where: { eventGroupId: { in: groupIds } },
+            orderBy: [{ rankPosition: 'asc' }, { points: 'desc' }],
+          })
+        : Promise.resolve([]),
+      // Fetch all sets for all matches in this event (1 query)
+      prisma.matchSet.findMany({
+        where: { matchId: { in: allMatches.map((m) => m.id) } },
+        orderBy: { setNumber: 'asc' },
+      }),
+    ]);
+
+    // --- Step 3: collect all teamIds referenced anywhere, batch-fetch (1 query) ---
+    const teamIdSet = new Set<string>();
+    for (const m of allMatches) {
+      if (m.team1Id) teamIdSet.add(m.team1Id);
+      if (m.team2Id) teamIdSet.add(m.team2Id);
+      if (m.winnerTeamId) teamIdSet.add(m.winnerTeamId);
+    }
+    for (const s of allStandings) {
+      teamIdSet.add(s.teamId);
+    }
+
+    const teamsWithPlayers = teamIdSet.size
+      ? await prisma.team.findMany({
+          where: { id: { in: Array.from(teamIdSet) } },
+          include: { player1: true, player2: true },
+        })
+      : [];
+
+    // --- Build lookup maps ---
+    const teamMap = new Map<string, (typeof teamsWithPlayers)[0]>();
+    for (const t of teamsWithPlayers) teamMap.set(t.id, t);
+
+    const setsByMatch = new Map<string, typeof allMatchSets>();
+    for (const s of allMatchSets) {
+      if (!setsByMatch.has(s.matchId)) setsByMatch.set(s.matchId, []);
+      setsByMatch.get(s.matchId)!.push(s);
+    }
+
+    const standingsByGroup = new Map<string, typeof allStandings>();
+    for (const s of allStandings) {
+      if (!standingsByGroup.has(s.eventGroupId)) standingsByGroup.set(s.eventGroupId, []);
+      standingsByGroup.get(s.eventGroupId)!.push(s);
+    }
+
+    // --- Helper: enrich team from map (no DB call) ---
+    const enrichTeam = (teamId: string | null) => {
       if (!teamId) return null;
-      const team = await prisma.team.findUnique({
-        where: { id: teamId },
-        include: { player1: true, player2: true },
-      });
+      const team = teamMap.get(teamId);
       return team ? { ...team, label: teamLabel(team) } : null;
     };
 
-    const groupsWithData = await Promise.all(
-      groups.map(async (group) => {
-        const [standings, matches] = await Promise.all([
-          prisma.eventGroupStanding.findMany({
-            where: { eventGroupId: group.id },
-            orderBy: [{ rankPosition: 'asc' }, { points: 'desc' }],
-          }),
-          prisma.match.findMany({
-            where: { groupId: group.id },
-            orderBy: { matchNumber: 'asc' },
-          }),
-        ]);
+    // --- Assemble groups ---
+    const groupsWithData = groups.map((group) => {
+      const standings = standingsByGroup.get(group.id) ?? [];
+      const matches = groupMatchMap.get(group.id) ?? [];
 
-        const standingsWithTeams = await Promise.all(
-          standings.map(async (s) => ({
-            ...s,
-            team: await enrichTeam(s.teamId),
-          })),
-        );
+      const standingsWithTeams = standings.map((s) => ({
+        ...s,
+        team: enrichTeam(s.teamId),
+      }));
 
-        const matchesWithTeams = await Promise.all(
-          matches.map(async (m) => ({
-            ...m,
-            team1: await enrichTeam(m.team1Id),
-            team2: await enrichTeam(m.team2Id),
-            winner: await enrichTeam(m.winnerTeamId),
-            sets: await prisma.matchSet.findMany({
-              where: { matchId: m.id },
-              orderBy: { setNumber: 'asc' },
-            }),
-          })),
-        );
-
-        return { ...group, standings: standingsWithTeams, matches: matchesWithTeams };
-      }),
-    );
-
-    const knockoutWithTeams = await Promise.all(
-      knockoutMatches.map(async (m) => ({
+      const matchesWithTeams = matches.map((m) => ({
         ...m,
-        team1: await enrichTeam(m.team1Id),
-        team2: await enrichTeam(m.team2Id),
-        winner: await enrichTeam(m.winnerTeamId),
-        sets: await prisma.matchSet.findMany({
-          where: { matchId: m.id },
-          orderBy: { setNumber: 'asc' },
-        }),
-      })),
-    );
+        team1: enrichTeam(m.team1Id),
+        team2: enrichTeam(m.team2Id),
+        winner: enrichTeam(m.winnerTeamId),
+        sets: setsByMatch.get(m.id) ?? [],
+      }));
+
+      return { ...group, standings: standingsWithTeams, matches: matchesWithTeams };
+    });
+
+    // --- Assemble knockout ---
+    const knockoutWithTeams = knockoutMatches.map((m) => ({
+      ...m,
+      team1: enrichTeam(m.team1Id),
+      team2: enrichTeam(m.team2Id),
+      winner: enrichTeam(m.winnerTeamId),
+      sets: setsByMatch.get(m.id) ?? [],
+    }));
 
     const knockoutByRound: Record<string, any[]> = {};
     for (const m of knockoutWithTeams) {
