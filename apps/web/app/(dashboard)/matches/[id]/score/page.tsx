@@ -38,7 +38,7 @@ export default function ScorePage({ params }: PageProps) {
       })
       .catch(() => { setMsg('Partida não encontrada'); setMsgType('err'); })
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, authFetch]);
 
   function updateSet(i: number, field: keyof SetEntry, value: string | number) {
     setSets(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s));

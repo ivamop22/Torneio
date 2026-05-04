@@ -1,12 +1,14 @@
 'use client';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
-type EventItem = { id: string; tournamentId: string; name: string; gender: string; format: string; category?: string | null; status: string };
-type Player    = { id: string; fullName: string; gender?: string | null };
-type Team      = { id: string; eventId?: string; seed?: number | null; status: string; player1?: { id: string; fullName: string } | null; player2?: { id: string; fullName: string } | null };
+type Tournament = { id: string; name: string };
+type EventItem  = { id: string; tournamentId: string; name: string; gender: string; format: string; category?: string | null; status: string };
+type Player     = { id: string; fullName: string; gender?: string | null };
+type Team       = { id: string; eventId?: string; seed?: number | null; status: string; player1?: { id: string; fullName: string } | null; player2?: { id: string; fullName: string } | null };
 
 type Props = {
+  tournaments?: Tournament[];
   events: EventItem[];
   players: Player[];
   teams: Team[];
@@ -15,22 +17,43 @@ type Props = {
   showMsg: (msg: string, type?: 'ok' | 'err') => void;
 };
 
-export function TeamsTab({ events, players, teams, apiRequest, onRefresh, showMsg }: Props) {
-  const [eventId, setEventId] = useState(events[0]?.id ?? '');
+export function TeamsTab({ tournaments = [], events, players, teams, apiRequest, onRefresh, showMsg }: Props) {
+  const [selectedTournamentId, setSelectedTournamentId] = useState(tournaments[0]?.id ?? '');
+  const [eventId, setEventId] = useState('');
   const [p1Id, setP1Id]       = useState('');
   const [p2Id, setP2Id]       = useState('');
   const [seed, setSeed]       = useState('');
   const [saving, setSaving]   = useState(false);
 
-  // Edit state
-  const [editId, setEditId]       = useState<string | null>(null);
-  const [editSeed, setEditSeed]   = useState('');
-  const [editP1Id, setEditP1Id]   = useState('');
-  const [editP2Id, setEditP2Id]   = useState('');
+  const [editId, setEditId]         = useState<string | null>(null);
+  const [editSeed, setEditSeed]     = useState('');
+  const [editP1Id, setEditP1Id]     = useState('');
+  const [editP2Id, setEditP2Id]     = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
-  // Delete state
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const filteredEvents = selectedTournamentId
+    ? events.filter(e => e.tournamentId === selectedTournamentId)
+    : events;
+
+  const filteredEventIds = new Set(filteredEvents.map(e => e.id));
+  const filteredTeams = teams.filter(t => t.eventId && filteredEventIds.has(t.eventId));
+
+  const eventMap = Object.fromEntries(events.map(e => [e.id, e]));
+
+  // Reset eventId when tournament or events change
+  useEffect(() => {
+    const first = filteredEvents[0]?.id ?? '';
+    setEventId(first);
+  }, [selectedTournamentId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Initialize eventId on first load
+  useEffect(() => {
+    if (!eventId && filteredEvents.length > 0) {
+      setEventId(filteredEvents[0].id);
+    }
+  }, [filteredEvents, eventId]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -100,19 +123,25 @@ export function TeamsTab({ events, players, teams, apiRequest, onRefresh, showMs
     }
   }
 
-  const selectedEvent = events.find(ev => ev.id === eventId);
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 items-start">
       {/* Create Form */}
       <div className="card p-6">
         <h2 className="font-display text-xl font-bold mb-5">Nova Dupla</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {tournaments.length > 0 && (
+            <div>
+              <label className="label">Torneio *</label>
+              <select className="input" value={selectedTournamentId} onChange={e => setSelectedTournamentId(e.target.value)} required>
+                {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="label">Evento *</label>
             <select className="input" value={eventId} onChange={e => setEventId(e.target.value)} required>
-              {events.length === 0 && <option value="">Nenhum evento</option>}
-              {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+              {filteredEvents.length === 0 && <option value="">Nenhum evento neste torneio</option>}
+              {filteredEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
             </select>
           </div>
           <div>
@@ -137,7 +166,7 @@ export function TeamsTab({ events, players, teams, apiRequest, onRefresh, showMs
             <label className="label">Seed (opcional)</label>
             <input className="input" type="number" min="1" placeholder="Ex: 1 = cabeça de chave" value={seed} onChange={e => setSeed(e.target.value)} />
           </div>
-          <button type="submit" className="btn btn-primary btn-lg mt-1" disabled={saving || events.length === 0 || players.length < 2}>
+          <button type="submit" className="btn btn-primary btn-lg mt-1" disabled={saving || filteredEvents.length === 0 || players.length < 2}>
             {saving ? <><span className="spinner" /> Salvando...</> : '+ Criar Dupla'}
           </button>
         </form>
@@ -145,8 +174,23 @@ export function TeamsTab({ events, players, teams, apiRequest, onRefresh, showMs
 
       {/* List */}
       <div className="flex flex-col gap-4">
-        <h2 className="font-display text-xl font-bold">Duplas Cadastradas <span className="text-[var(--text-muted)] font-normal text-base">({teams.length})</span></h2>
-        {teams.length === 0 ? (
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h2 className="font-display text-xl font-bold">
+            Duplas <span className="text-[var(--text-muted)] font-normal text-base">({filteredTeams.length})</span>
+          </h2>
+          {tournaments.length > 1 && (
+            <select
+              className="input"
+              style={{ width: 'auto', minWidth: '200px' }}
+              value={selectedTournamentId}
+              onChange={e => setSelectedTournamentId(e.target.value)}
+            >
+              {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          )}
+        </div>
+
+        {filteredTeams.length === 0 ? (
           <div className="card">
             <div className="empty-state">
               <span className="empty-state-icon">👥</span>
@@ -161,12 +205,13 @@ export function TeamsTab({ events, players, teams, apiRequest, onRefresh, showMs
                 <tr>
                   <th>Seed</th>
                   <th>Dupla</th>
+                  <th>Evento</th>
                   <th>Status</th>
                   <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {teams.map(t => (
+                {filteredTeams.map(t => (
                   <>
                     <tr key={t.id} className={editId === t.id ? 'bg-[var(--bg-elevated)]' : ''}>
                       <td>
@@ -179,6 +224,11 @@ export function TeamsTab({ events, players, teams, apiRequest, onRefresh, showMs
                         <div className="font-medium text-sm">
                           {t.player1?.fullName ?? '?'} <span className="text-[var(--text-faint)]">/</span> {t.player2?.fullName ?? '?'}
                         </div>
+                      </td>
+                      <td>
+                        <span className="text-sm text-[var(--text-muted)]">
+                          {t.eventId ? (eventMap[t.eventId]?.name ?? '—') : '—'}
+                        </span>
                       </td>
                       <td>
                         <span className={`badge ${t.status === 'accepted' ? 'badge-done' : 'badge-draft'}`}>{t.status}</span>
@@ -204,7 +254,7 @@ export function TeamsTab({ events, players, teams, apiRequest, onRefresh, showMs
                     </tr>
                     {editId === t.id && (
                       <tr key={`edit-${t.id}`}>
-                        <td colSpan={4} style={{ padding: '0.75rem 1rem', background: 'var(--bg-elevated)' }}>
+                        <td colSpan={5} style={{ padding: '0.75rem 1rem', background: 'var(--bg-elevated)' }}>
                           <form onSubmit={handleEditSave} className="flex flex-wrap gap-3 items-end">
                             <div>
                               <label className="label">Seed</label>

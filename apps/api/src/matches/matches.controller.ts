@@ -33,6 +33,7 @@ export class MatchesController {
     });
   }
 
+  @Public()
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return prisma.match.findUnique({

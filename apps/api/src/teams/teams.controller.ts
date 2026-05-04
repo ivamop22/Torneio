@@ -17,7 +17,7 @@ export class TeamsController {
   @Get()
   async findAll(@Query('eventId') eventId?: string) {
     const teams = await prisma.team.findMany({
-      where: eventId ? { eventId } : undefined,
+      where: { deletedAt: null, ...(eventId ? { eventId } : {}) },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -85,16 +85,13 @@ export class TeamsController {
       throw new NotFoundException('Dupla nao encontrada');
     }
 
-    const completedMatch = await prisma.match.findFirst({
-      where: {
-        status: 'completed',
-        OR: [{ team1Id: id }, { team2Id: id }],
-      },
+    const anyMatch = await prisma.match.findFirst({
+      where: { OR: [{ team1Id: id }, { team2Id: id }] },
     });
 
-    if (completedMatch) {
+    if (anyMatch) {
       throw new BadRequestException(
-        'Nao e possivel editar uma dupla que ja disputou partidas.',
+        'Exclua o chaveamento antes de editar a dupla.',
       );
     }
 
@@ -125,16 +122,13 @@ export class TeamsController {
       throw new NotFoundException('Dupla nao encontrada');
     }
 
-    const completedMatch = await prisma.match.findFirst({
-      where: {
-        status: 'completed',
-        OR: [{ team1Id: id }, { team2Id: id }],
-      },
+    const anyMatch = await prisma.match.findFirst({
+      where: { OR: [{ team1Id: id }, { team2Id: id }] },
     });
 
-    if (completedMatch) {
+    if (anyMatch) {
       throw new BadRequestException(
-        'Nao e possivel excluir uma dupla que ja disputou partidas.',
+        'Exclua o chaveamento antes de remover a dupla.',
       );
     }
 

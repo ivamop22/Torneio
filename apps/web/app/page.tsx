@@ -154,7 +154,7 @@ export default function AdminPage() {
             {tab === 'torneios'    && <TournamentsTab tournaments={tournaments} {...tabProps} />}
             {tab === 'eventos'     && <EventsTab events={events} tournaments={tournaments} {...tabProps} />}
             {tab === 'jogadores'   && <PlayersTab players={players} {...tabProps} />}
-            {tab === 'duplas'      && <TeamsTab events={events} players={players} teams={teams} {...tabProps} />}
+            {tab === 'duplas'      && <TeamsTab tournaments={tournaments} events={events} players={players} teams={teams} {...tabProps} />}
             {tab === 'chaveamento' && <DrawTab events={events} tournaments={tournaments} {...tabProps} />}
           </>
         )}
