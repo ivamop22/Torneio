@@ -113,9 +113,9 @@ export class DrawsController {
 
   @Public()
   @Get('ranking')
-  async getRanking(@Query('category') category?: string, @Res({ passthrough: true }) res: Response) {
+  async getRanking(@Query('category') category?: string, @Res({ passthrough: true }) res?: Response) {
     // Ranking is relatively static — 5-minute cache
-    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+    res?.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
     return this.drawsService.getRanking(category);
   }
 }
