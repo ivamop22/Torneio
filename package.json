@@ -5,6 +5,10 @@
   "scripts": {
     "dev": "pnpm -r --parallel --filter api --filter web dev",
     "build": "pnpm -r --filter api --filter web build",
+    "build:web": "pnpm --filter web build",
+    "build:api": "pnpm --filter api build",
+    "start:web": "pnpm --filter web start",
+    "start:api": "pnpm --filter api start",
     "setup:db": "pnpm --filter @beach-tennis/db generate && pnpm --filter @beach-tennis/db migrate",
     "test:smoke": "pnpm --filter api build && pnpm --filter web build",
     "simulate:tournament": "pnpm --filter @beach-tennis/db generate && pnpm --filter api simulate:tournament"
