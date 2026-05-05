@@ -1,6 +1,5 @@
-import { Module, OnApplicationBootstrap } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import * as bcrypt from 'bcryptjs';
 import { TournamentsController } from './tournaments/tournaments.controller';
 import { EventsController } from './events/events.controller';
 import { PlayersController } from './players/players.controller';
@@ -12,7 +11,6 @@ import { DrawsService } from './draws/draws.service';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { SuperuserModule } from './superuser/superuser.module';
-import { prisma } from './lib/prisma';
 
 @Module({
   imports: [AuthModule, SuperuserModule],
@@ -31,23 +29,4 @@ import { prisma } from './lib/prisma';
   ],
   exports: [DrawsService],
 })
-export class AppModule implements OnApplicationBootstrap {
-  async onApplicationBootstrap() {
-    try {
-      const email = 'chrisjsp35@gmail.com';
-      await prisma.user.upsert({
-        where: { email },
-        create: {
-          email,
-          name: 'Super Admin',
-          role: 'superuser',
-          passwordHash: bcrypt.hashSync('V1toriA20215', 10),
-          status: 'active',
-        },
-        update: {},
-      });
-    } catch (e) {
-      console.error('Superuser seed failed:', e);
-    }
-  }
-}
+export class AppModule {}
