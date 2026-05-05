@@ -4,13 +4,13 @@
   "packageManager": "pnpm@10.33.3",
   "scripts": {
     "dev": "corepack pnpm -r --parallel --filter api --filter web dev",
-    "build": "corepack pnpm -r --filter api --filter web build",
+    "build": "corepack pnpm --filter @beach-tennis/db generate && corepack pnpm -r --filter api --filter web build",
     "build:web": "corepack pnpm --filter web build",
-    "build:api": "corepack pnpm --filter api build",
+    "build:api": "corepack pnpm --filter @beach-tennis/db generate && corepack pnpm --filter api build",
     "start:web": "corepack pnpm --filter web start",
     "start:api": "corepack pnpm --filter api start",
     "setup:db": "corepack pnpm --filter @beach-tennis/db generate && corepack pnpm --filter @beach-tennis/db migrate",
-    "test:smoke": "corepack pnpm --filter api build && corepack pnpm --filter web build",
+    "test:smoke": "corepack pnpm --filter @beach-tennis/db generate && corepack pnpm --filter api build && corepack pnpm --filter web build",
     "simulate:tournament": "corepack pnpm --filter @beach-tennis/db generate && corepack pnpm --filter api simulate:tournament"
   },
   "pnpm": {
