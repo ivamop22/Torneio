@@ -1,15 +1,37 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
-import { TournamentsTab } from '../components/admin/TournamentsTab';
-import { EventsTab }      from '../components/admin/EventsTab';
-import { PlayersTab }     from '../components/admin/PlayersTab';
-import { TeamsTab }       from '../components/admin/TeamsTab';
-import { DrawTab }        from '../components/admin/DrawTab';
-import { Toast }          from '../components/ui/Toast';
-import { useAuth }        from '../contexts/AuthContext';
+import { Toast } from '../components/ui/Toast';
+import { useAuth } from '../contexts/AuthContext';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const TabFallback = () => (
+  <div className="card p-6 flex items-center gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+    <span className="spinner" />
+    Carregando módulo...
+  </div>
+);
+
+const TournamentsTab = dynamic(
+  () => import('../components/admin/TournamentsTab').then((mod) => mod.TournamentsTab),
+  { ssr: false, loading: TabFallback },
+);
+const EventsTab = dynamic(
+  () => import('../components/admin/EventsTab').then((mod) => mod.EventsTab),
+  { ssr: false, loading: TabFallback },
+);
+const PlayersTab = dynamic(
+  () => import('../components/admin/PlayersTab').then((mod) => mod.PlayersTab),
+  { ssr: false, loading: TabFallback },
+);
+const TeamsTab = dynamic(
+  () => import('../components/admin/TeamsTab').then((mod) => mod.TeamsTab),
+  { ssr: false, loading: TabFallback },
+);
+const DrawTab = dynamic(
+  () => import('../components/admin/DrawTab').then((mod) => mod.DrawTab),
+  { ssr: false, loading: TabFallback },
+);
 
 type Tournament = { id: string; name: string; slug: string; status: string; city?: string | null; state?: string | null; startDate: string; endDate: string };
 type EventItem  = { id: string; tournamentId: string; name: string; gender: string; format: string; category?: string | null; status: string };
@@ -26,8 +48,20 @@ const TABS: { key: Tab; icon: string; label: string }[] = [
   { key: 'chaveamento', icon: '🎯', label: 'Chaveamento' },
 ];
 
+async function parseApiResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!response.ok) {
+    const message = data?.message || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return data as T;
+}
+
 export default function AdminPage() {
-  const { user, token, logout, authFetch } = useAuth();
+  const { user, logout, authFetch } = useAuth();
   const [tab, setTab] = useState<Tab>(() => {
     if (typeof window === 'undefined') return 'torneios';
     const t = new URLSearchParams(window.location.search).get('tab') as Tab;
@@ -47,34 +81,30 @@ export default function AdminPage() {
   }, []);
 
   const apiRequest = useCallback(async (url: string, method: string, body?: any) => {
-    const r = await authFetch(url, {
+    const response = await authFetch(url, {
       method,
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({ message: 'Erro desconhecido' }));
-      throw new Error(err.message || `HTTP ${r.status}`);
-    }
-    if (r.status === 204) return null;
-    const text = await r.text();
-    return text ? JSON.parse(text) : null;
+
+    if (response.status === 204) return null;
+    return parseApiResponse(response);
   }, [authFetch]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [ts, es, ps, tms] = await Promise.all([
-        authFetch('/tournaments').then(r => r.json()),
-        authFetch('/events').then(r => r.json()),
-        authFetch('/players').then(r => r.json()),
-        authFetch('/teams').then(r => r.json()),
+        authFetch('/tournaments').then((r) => parseApiResponse<Tournament[]>(r)),
+        authFetch('/events').then((r) => parseApiResponse<EventItem[]>(r)),
+        authFetch('/players').then((r) => parseApiResponse<Player[]>(r)),
+        authFetch('/teams').then((r) => parseApiResponse<Team[]>(r)),
       ]);
       setTournaments(Array.isArray(ts) ? ts : []);
       setEvents(Array.isArray(es) ? es : []);
       setPlayers(Array.isArray(ps) ? ps : []);
       setTeams(Array.isArray(tms) ? tms : []);
-    } catch {
-      showMsg('Erro ao conectar com a API', 'err');
+    } catch (err: any) {
+      showMsg(err.message || 'Erro ao conectar com a API', 'err');
     } finally {
       setLoading(false);
     }
