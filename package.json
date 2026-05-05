@@ -1,17 +1,26 @@
 {
   "name": "beach-tennis-platform",
   "private": true,
-  "packageManager": "pnpm@10.0.0",
+  "packageManager": "pnpm@10.33.3",
   "scripts": {
-    "dev": "pnpm -r --parallel --filter api --filter web dev",
-    "build": "pnpm -r --filter api --filter web build",
-    "build:web": "pnpm --filter web build",
-    "build:api": "pnpm --filter api build",
-    "start:web": "pnpm --filter web start",
-    "start:api": "pnpm --filter api start",
-    "setup:db": "pnpm --filter @beach-tennis/db generate && pnpm --filter @beach-tennis/db migrate",
-    "test:smoke": "pnpm --filter api build && pnpm --filter web build",
-    "simulate:tournament": "pnpm --filter @beach-tennis/db generate && pnpm --filter api simulate:tournament"
+    "dev": "corepack pnpm -r --parallel --filter api --filter web dev",
+    "build": "corepack pnpm -r --filter api --filter web build",
+    "build:web": "corepack pnpm --filter web build",
+    "build:api": "corepack pnpm --filter api build",
+    "start:web": "corepack pnpm --filter web start",
+    "start:api": "corepack pnpm --filter api start",
+    "setup:db": "corepack pnpm --filter @beach-tennis/db generate && corepack pnpm --filter @beach-tennis/db migrate",
+    "test:smoke": "corepack pnpm --filter api build && corepack pnpm --filter web build",
+    "simulate:tournament": "corepack pnpm --filter @beach-tennis/db generate && corepack pnpm --filter api simulate:tournament"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "sharp"
+    ]
   },
   "dependencies": {
     "@prisma/client": "5.22.0",
