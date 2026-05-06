@@ -37,20 +37,21 @@ type Props = {
 function SetScore({ sets }: { sets: MatchSet[] }) {
   if (!sets.length) return null;
   return (
-    <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.375rem' }}>
+    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem', justifyContent: 'center' }}>
       {sets.map(s => (
         <span key={s.setNumber} style={{
           fontFamily: 'Barlow Condensed, sans-serif',
-          fontSize: '0.8rem', fontWeight: 700,
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border)',
-          padding: '0.1rem 0.375rem',
-          borderRadius: '4px',
-          color: 'var(--text-primary)',
-          letterSpacing: '0.02em',
+          fontSize: '1rem', // Maior para leitura no sol
+          fontWeight: 800,
+          background: 'var(--bg-surface, #1e293b)',
+          border: '1px solid var(--border, #334155)',
+          padding: '0.2rem 0.6rem',
+          borderRadius: '6px',
+          color: 'var(--text-primary, #f8fafc)',
+          letterSpacing: '0.05em',
         }}>
-          {s.team1Games}-{s.team2Games}
-          {s.tieBreakTeam1 != null ? `(${s.tieBreakTeam1})` : ''}
+          {s.team1Games} - {s.team2Games}
+          {s.tieBreakTeam1 != null ? <span style={{ fontSize: '0.75rem', color: '#fbbf24', marginLeft: '2px' }}>({s.tieBreakTeam1})</span> : ''}
         </span>
       ))}
     </div>
@@ -82,20 +83,19 @@ function MatchCard({ match, apiUrl, onRefresh }: { match: Match; apiUrl: string;
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
-          padding: '0.5rem 0.75rem',
-          borderRadius: '6px',
-          background: 'var(--bg-elevated)',
-          border: '1px solid transparent',
-          opacity: 0.5,
+          padding: '0.8rem 1rem', // Fat finger approach
+          borderRadius: '8px',
+          background: 'var(--bg-surface, #0f172a)',
+          border: '2px dashed var(--border, #334155)', // Tracejado de alto contraste
         }}>
           <span style={{
             flex: 1,
-            fontSize: '0.75rem',
-            fontWeight: 500,
-            fontStyle: 'italic',
-            color: 'var(--text-faint)',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            color: 'var(--text-muted, #64748b)',
+            textAlign: 'center',
           }}>
-            Aguardando classificação
+            Aguardando adversário
           </span>
         </div>
       );
@@ -105,51 +105,46 @@ function MatchCard({ match, apiUrl, onRefresh }: { match: Match; apiUrl: string;
       <div style={{
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
         gap: '0.5rem',
-        padding: '0.5rem 0.75rem',
-        borderRadius: '6px',
-        background: isCompleted && isWinner ? 'rgba(0,200,80,0.08)' : 'var(--bg-elevated)',
-        border: `1px solid ${isCompleted && isWinner ? 'rgba(0,200,80,0.2)' : 'transparent'}`,
-        opacity: isCompleted && !isWinner ? 0.55 : 1,
+        padding: '0.6rem 0.8rem',
+        borderRadius: '8px',
+        background: isCompleted && isWinner ? 'rgba(34, 197, 94, 0.15)' : 'var(--bg-elevated, #1e293b)',
+        border: `2px solid ${isCompleted && isWinner ? '#22c55e' : 'var(--border, #334155)'}`, // Borda mais grossa
       }}>
-        {isCompleted && isWinner && (
-          <span style={{ color: '#00C850', fontSize: '0.7rem', flexShrink: 0 }}>✓</span>
-        )}
-        <span style={{
-          flex: 1,
-          fontSize: '0.8rem',
-          fontWeight: 600,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          color: isCompleted && isWinner ? '#00C850' : 'var(--text-primary)',
-        }}>
-          {team.label}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
+          {isCompleted && isWinner && (
+            <span style={{ color: '#22c55e', fontSize: '1rem', flexShrink: 0, fontWeight: 'bold' }}>✓</span>
+          )}
+          <span style={{
+            fontSize: '0.9rem', // Maior legibilidade
+            fontWeight: 700,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            color: isCompleted && isWinner ? '#22c55e' : (isCompleted && !isWinner ? 'var(--text-muted, #64748b)' : 'var(--text-primary, #f8fafc)'),
+            textDecoration: isCompleted && !isWinner ? 'line-through' : 'none', // Feedback visual claro para quem perdeu
+          }}>
+            {team.label}
+          </span>
+        </div>
+
         {!isCompleted && bothTeamsPresent && opponent && (
           <button
             onClick={() => submitResult(team.id, opponent.id)}
             style={{
               flexShrink: 0,
-              fontSize: '0.65rem',
-              fontWeight: 700,
-              padding: '0.2rem 0.45rem',
-              borderRadius: '4px',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-glow)',
-              color: 'var(--text-muted)',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              padding: '0.5rem 0.8rem', // Fat finger button
+              borderRadius: '6px',
+              background: '#3b82f6', // Cor de ação chamativa
+              border: 'none',
+              color: '#ffffff',
               cursor: 'pointer',
-              transition: 'var(--transition)',
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.background = 'rgba(180,255,61,0.15)';
-              (e.currentTarget as HTMLElement).style.color = 'var(--accent-lime)';
-              (e.currentTarget as HTMLElement).style.borderColor = 'rgba(180,255,61,0.4)';
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.background = 'var(--bg-surface)';
-              (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)';
-              (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glow)';
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
             }}
           >
             Venceu
@@ -161,54 +156,56 @@ function MatchCard({ match, apiUrl, onRefresh }: { match: Match; apiUrl: string;
 
   return (
     <div style={{
-      background: 'var(--bg-card)',
-      border: `1px solid ${isLive ? 'rgba(255,64,96,0.5)' : 'var(--border)'}`,
-      borderRadius: 'var(--radius-md)',
+      background: 'var(--bg-card, #0f172a)',
+      border: `2px solid ${isLive ? '#ef4444' : 'var(--border, #334155)'}`,
+      borderRadius: '12px', // Cantos mais arredondados, visual mais moderno
       overflow: 'hidden',
-      minWidth: '200px',
-      maxWidth: '250px',
-      boxShadow: isLive ? '0 0 20px rgba(255,64,96,0.12)' : 'none',
-      transition: 'var(--transition)',
+      minWidth: '280px', // Mais largo para ocupar melhor a tela do celular
+      maxWidth: '320px',
+      boxShadow: isLive ? '0 0 15px rgba(239, 68, 68, 0.4)' : '0 4px 6px rgba(0,0,0,0.1)',
+      display: 'flex',
+      flexDirection: 'column',
     }}>
-      {/* Header */}
+      {/* Header do Card */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0.375rem 0.75rem',
-        background: 'var(--bg-surface)',
-        borderBottom: '1px solid var(--border)',
+        padding: '0.5rem 1rem',
+        background: isLive ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-surface, #1e293b)',
+        borderBottom: '1px solid var(--border, #334155)',
       }}>
-        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-faint)' }}>
-          #{match.matchNumber}
+        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted, #94a3b8)' }}>
+          JOGO #{match.matchNumber}
         </span>
         <span style={{
-          fontSize: '0.65rem', fontWeight: 700,
-          padding: '0.1rem 0.4rem',
+          fontSize: '0.7rem', 
+          fontWeight: 800,
+          padding: '0.2rem 0.6rem',
           borderRadius: '99px',
-          background: isLive ? 'rgba(255,64,96,0.15)' : isCompleted ? 'rgba(0,200,80,0.1)' : 'var(--bg-elevated)',
-          color: isLive ? '#FF6080' : isCompleted ? '#00C850' : 'var(--text-faint)',
-          textTransform: 'uppercase' as const,
-          letterSpacing: '0.06em',
+          background: isLive ? '#ef4444' : isCompleted ? 'rgba(34, 197, 94, 0.2)' : 'var(--bg-elevated, #334155)',
+          color: isLive ? '#ffffff' : isCompleted ? '#22c55e' : 'var(--text-muted, #94a3b8)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
           display: 'flex',
           alignItems: 'center',
-          gap: '3px',
+          gap: '4px',
         }}>
-          {isLive && <span className="live-dot" style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent-red)' }} />}
-          {isLive ? 'Ao Vivo' : isCompleted ? 'Encerrado' : 'Aguardando'}
+          {isLive && <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', animation: 'pulse 1.5s infinite' }} />}
+          {isLive ? 'AO VIVO' : isCompleted ? 'FIM' : 'AGUARDANDO'}
         </span>
       </div>
 
-      {/* Teams */}
-      <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+      {/* Áreas dos Times */}
+      <div style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
         <TeamRow team={match.team1} isWinner={match.winner?.id === match.team1?.id} slot={1} />
-        <div style={{ textAlign: 'center', fontSize: '0.6rem', fontWeight: 800, color: 'var(--text-faint)', letterSpacing: '0.1em' }}>VS</div>
+        <div style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 900, color: 'var(--text-muted, #64748b)' }}>VS</div>
         <TeamRow team={match.team2} isWinner={match.winner?.id === match.team2?.id} slot={2} />
       </div>
 
-      {/* Sets */}
+      {/* Placar dos Sets */}
       {match.sets.length > 0 && (
-        <div style={{ padding: '0 0.75rem 0.5rem' }}>
+        <div style={{ padding: '0 0.75rem 0.75rem', background: 'var(--bg-card, #0f172a)' }}>
           <SetScore sets={match.sets} />
         </div>
       )}
@@ -219,11 +216,13 @@ function MatchCard({ match, apiUrl, onRefresh }: { match: Match; apiUrl: string;
 export function TournamentBracket({ knockout, roundOrder, champion, apiUrl, onRefresh }: Props) {
   if (roundOrder.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '0.75rem', opacity: 0.4 }}>🎾</div>
-        <p style={{ fontSize: '1.1rem', fontWeight: 600, fontFamily: 'Barlow Condensed, sans-serif' }}>Fase de grupos em andamento</p>
-        <p style={{ fontSize: '0.875rem', marginTop: '0.5rem', color: 'var(--text-faint)' }}>
-          O mata-mata será gerado automaticamente quando a fase de grupos terminar.
+      <div style={{ textAlign: 'center', padding: '4rem 1.5rem', color: 'var(--text-muted, #94a3b8)' }}>
+        <div style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.8 }}>🎾</div>
+        <h3 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Barlow Condensed, sans-serif', color: 'var(--text-primary, #f8fafc)' }}>
+          FASE DE GRUPOS EM ANDAMENTO
+        </h3>
+        <p style={{ fontSize: '1rem', marginTop: '0.5rem' }}>
+          As chaves do mata-mata serão geradas assim que os grupos finalizarem.
         </p>
       </div>
     );
@@ -232,62 +231,69 @@ export function TournamentBracket({ knockout, roundOrder, champion, apiUrl, onRe
   const orderedRounds = [...roundOrder].reverse();
 
   const ROUND_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-    'Final':     { bg: 'rgba(255,209,74,0.1)',  text: '#FFD14A', border: 'rgba(255,209,74,0.3)' },
-    'Semifinal': { bg: 'rgba(168,117,255,0.1)', text: '#A875FF', border: 'rgba(168,117,255,0.3)' },
+    'Final':     { bg: 'rgba(251, 191, 36, 0.15)',  text: '#fbbf24', border: '#fbbf24' },
+    'Semifinal': { bg: 'rgba(168, 85, 247, 0.15)', text: '#a855f7', border: '#a855f7' },
   };
 
   return (
     <div style={{ width: '100%' }}>
-      {/* Champion */}
-      {champion && (
-        <div style={{ marginBottom: '2.5rem', textAlign: 'center' }}>
-          <div
-            className="champion-glow"
-            style={{
+      {/* Container de rolagem responsivo com Snap Effect */}
+      <div style={{ 
+        overflowX: 'auto', 
+        paddingBottom: '2rem',
+        scrollSnapType: 'x mandatory', // Faz a rolagem "grudar" na próxima rodada no celular
+        WebkitOverflowScrolling: 'touch',
+      }}>
+        
+        {champion && (
+          <div style={{ marginBottom: '3rem', textAlign: 'center', padding: '0 1rem' }}>
+            <div style={{
               display: 'inline-block',
-              background: 'linear-gradient(135deg, rgba(255,209,74,0.15) 0%, rgba(255,160,30,0.08) 100%)',
-              border: '2px solid rgba(255,209,74,0.5)',
-              borderRadius: 'var(--radius-xl)',
-              padding: '1.5rem 2.5rem',
-            }}
-          >
-            <div className="trophy-bounce" style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🏆</div>
-            <div style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#FFD14A', marginBottom: '0.375rem' }}>
-              Campeão
-            </div>
-            <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {champion.label}
+              background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.1) 100%)',
+              border: '2px solid #fbbf24',
+              borderRadius: '16px',
+              padding: '2rem 3rem',
+              boxShadow: '0 10px 25px rgba(251, 191, 36, 0.2)',
+            }}>
+              <div style={{ fontSize: '3.5rem', marginBottom: '0.5rem' }}>🏆</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#fbbf24', marginBottom: '0.5rem' }}>
+                CAMPEÃO
+              </div>
+              <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '2rem', fontWeight: 900, color: 'var(--text-primary, #f8fafc)' }}>
+                {champion.label}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Bracket */}
-      <div style={{ overflowX: 'auto', paddingBottom: '1rem' }}>
-        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', minWidth: 'max-content', padding: '0.5rem 1rem' }}>
+        <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start', minWidth: 'max-content', padding: '0.5rem 1rem' }}>
           {orderedRounds.map(roundName => {
             const matches = knockout[roundName] ?? [];
             const style = ROUND_STYLES[roundName];
             return (
-              <div key={roundName} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                {/* Round label */}
+              <div key={roundName} style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                gap: '1rem',
+                scrollSnapAlign: 'center', // Para o celular centralizar a coluna ao rolar
+              }}>
                 <div style={{
                   textAlign: 'center',
-                  marginBottom: '1rem',
-                  padding: '0.3rem 1rem',
+                  padding: '0.5rem 1.5rem',
                   borderRadius: '99px',
-                  fontSize: '0.75rem', fontWeight: 800,
+                  fontSize: '0.85rem', fontWeight: 900,
                   textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  background: style?.bg ?? 'rgba(28,45,80,0.6)',
-                  color: style?.text ?? 'var(--text-muted)',
-                  border: `1px solid ${style?.border ?? 'var(--border)'}`,
+                  letterSpacing: '0.1em',
+                  background: style?.bg ?? 'var(--bg-surface, #1e293b)',
+                  color: style?.text ?? 'var(--text-primary, #f8fafc)',
+                  border: `2px solid ${style?.border ?? 'var(--border, #334155)'}`,
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
                 }}>
                   {roundName}
                 </div>
 
-                {/* Matches */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                   {matches.map(m => (
                     <MatchCard key={m.id} match={m} apiUrl={apiUrl} onRefresh={onRefresh} />
                   ))}
