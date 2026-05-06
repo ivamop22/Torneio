@@ -7,7 +7,8 @@
     "start:dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
-    "simulate:tournament": "ts-node scripts/simulate-tournament.ts"
+    "simulate:tournament": "ts-node scripts/simulate-tournament.ts",
+    "prisma:generate": "prisma generate --schema ../../packages/db/prisma/schema.prisma"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.8",

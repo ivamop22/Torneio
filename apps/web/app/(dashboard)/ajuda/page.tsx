@@ -762,7 +762,7 @@ export default function AjudaPage() {
             key={s.id}
             onClick={() => scrollTo(s.id)}
             style={{
-              width: '100%', textAlign: 'left', background: 'transparent',
+              width: '100%', textAlign: 'left',
               border: 'none',
               borderLeft: activeSection === s.id ? '3px solid var(--accent-lime)' : '3px solid transparent',
               padding: '0.55rem 1.25rem', cursor: 'pointer',
