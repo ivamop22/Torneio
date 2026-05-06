@@ -20,6 +20,9 @@ model User {
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
 
+  // Relações SaaS
+  tournaments  Tournament[]
+
   @@map("users")
 }
 
@@ -32,6 +35,10 @@ model Club {
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // Relações SaaS
+  courts      Court[]
+  tournaments Tournament[]
 
   @@map("clubs")
 }
@@ -46,6 +53,8 @@ model Court {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt  DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  club       Club?     @relation(fields: [clubId], references: [id])
 
   @@unique([clubId, name])
   @@map("courts")
@@ -70,7 +79,11 @@ model Tournament {
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deleted_at      DateTime? @db.Timestamptz(6)
 
-  // Soft-delete filter is used on every list query
+  club            Club?           @relation(fields: [club_id], references: [id])
+  creator         User?           @relation(fields: [created_by], references: [id])
+  events          Event[]
+  rule            TournamentRule?
+
   @@index([deleted_at], map: "idx_tournaments_deleted_at")
   @@index([status, deleted_at], map: "idx_tournaments_status")
   @@map("tournaments")
@@ -100,6 +113,8 @@ model TournamentRule {
   createdAt                        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  tournament                       Tournament @relation(fields: [tournamentId], references: [id])
+
   @@map("tournament_rules")
 }
 
@@ -126,10 +141,10 @@ model Event {
   updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt          DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  // Relations
-  teams             Team[]
-  groups            EventGroup[]
-  registrationLinks RegistrationLink[]
+  tournament         Tournament         @relation(fields: [tournamentId], references: [id])
+  teams              Team[]
+  groups             EventGroup[]
+  registrationLinks  RegistrationLink[]
 
   @@index([tournamentId, status], map: "idx_events_tournament_status")
   @@map("events")
@@ -152,12 +167,10 @@ model Player {
   updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt         DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  // Relations
-  teamsAsPlayer1 Team[] @relation("TeamPlayer1")
-  teamsAsPlayer2 Team[] @relation("TeamPlayer2")
+  teamsAsPlayer1    Team[]    @relation("TeamPlayer1")
+  teamsAsPlayer2    Team[]    @relation("TeamPlayer2")
 
   @@index([eligibilityStatus], map: "idx_players_eligibility_status")
-  // Soft-delete filter runs on every player list/lookup
   @@index([deletedAt], map: "idx_players_deleted_at")
   @@map("players")
 }
@@ -190,16 +203,14 @@ model Team {
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  // Relations
-  event        Event   @relation(fields: [eventId], references: [id])
-  player1      Player  @relation("TeamPlayer1", fields: [player1Id], references: [id])
-  player2      Player? @relation("TeamPlayer2", fields: [player2Id], references: [id])
-  matchesTeam1 Match[] @relation("MatchTeam1")
-  matchesTeam2 Match[] @relation("MatchTeam2")
+  event        Event     @relation(fields: [eventId], references: [id])
+  player1      Player    @relation("TeamPlayer1", fields: [player1Id], references: [id])
+  player2      Player?   @relation("TeamPlayer2", fields: [player2Id], references: [id])
+  matchesTeam1 Match[]   @relation("MatchTeam1")
+  matchesTeam2 Match[]   @relation("MatchTeam2")
 
   @@unique([eventId, player1Id, player2Id])
   @@index([eventId, status], map: "idx_teams_event_status")
-  // Soft-delete filter used in most team queries
   @@index([deletedAt], map: "idx_teams_deleted_at")
   @@map("teams")
 }
@@ -258,7 +269,6 @@ model EventGroup {
   position  Int
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  // Relations
   event     Event                @relation(fields: [eventId], references: [id])
   standings EventGroupStanding[]
   matches   Match[]
@@ -283,8 +293,7 @@ model EventGroupStanding {
   rankPosition Int?     @map("rank_position")
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  // Relations
-  eventGroup EventGroup @relation(fields: [eventGroupId], references: [id])
+  eventGroup   EventGroup @relation(fields: [eventGroupId], references: [id])
 
   @@unique([eventGroupId, teamId])
   @@map("event_group_standings")
@@ -314,17 +323,14 @@ model Match {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  // Relations
-  team1 Team?   @relation("MatchTeam1", fields: [team1Id], references: [id])
-  team2 Team?   @relation("MatchTeam2", fields: [team2Id], references: [id])
-  group EventGroup? @relation(fields: [groupId], references: [id])
-  sets  MatchSet[]
+  team1         Team?       @relation("MatchTeam1", fields: [team1Id], references: [id])
+  team2         Team?       @relation("MatchTeam2", fields: [team2Id], references: [id])
+  group         EventGroup? @relation(fields: [groupId], references: [id])
+  sets          MatchSet[]
 
   @@index([courtId, scheduledAt], map: "idx_matches_court_time")
   @@index([eventId, status], map: "idx_matches_event_status")
-  // drawId is used when fetching knockout matches by draw
   @@index([drawId], map: "idx_matches_draw_id")
-  // groupId is filtered on every group-phase query
   @@index([groupId], map: "idx_matches_group_id")
   @@map("matches")
 }
@@ -341,8 +347,7 @@ model MatchSet {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  // Relations
-  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  match           Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
   @@unique([matchId, setNumber])
   @@index([matchId], map: "idx_match_sets_match")
@@ -365,17 +370,17 @@ model Ranking {
 }
 
 model RegistrationLink {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  token     String    @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  type      String    @db.VarChar(30) // 'admin_invite' | 'player_registration'
-  eventId   String?   @map("event_id") @db.Uuid
-  adminId   String    @map("admin_id") @db.Uuid
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
-  maxUses   Int       @default(1) @map("max_uses")
-  usedCount Int       @default(0) @map("used_count")
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token     String   @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type      String   @db.VarChar(30)
+  eventId   String?  @map("event_id") @db.Uuid
+  adminId   String   @map("admin_id") @db.Uuid
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  maxUses   Int      @default(1) @map("max_uses")
+  usedCount Int      @default(0) @map("used_count")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  event Event? @relation(fields: [eventId], references: [id])
+  event     Event?   @relation(fields: [eventId], references: [id])
 
   @@map("registration_links")
 }
