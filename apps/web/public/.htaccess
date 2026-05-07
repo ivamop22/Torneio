@@ -1,0 +1,5 @@
+# Hostinger LiteSpeed — roteamento para app Node.js
+# Este arquivo garante que o LiteSpeed encaminhe todas as requisições para o processo Node.js
+Options -MultiViews
+RewriteEngine On
+RewriteRule ^(.*)$ /$1 [L]
