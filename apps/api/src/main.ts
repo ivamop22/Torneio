@@ -6,6 +6,8 @@ import * as compression from 'compression';
 function getAllowedOrigins() {
   return [
     'http://localhost:3000',
+    'https://torneiobeachtennis.com',
+    'https://www.torneiobeachtennis.com',
     process.env.FRONTEND_URL,
     ...(process.env.FRONTEND_ORIGINS?.split(',') ?? []),
   ]
