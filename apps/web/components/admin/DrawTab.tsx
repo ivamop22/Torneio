@@ -143,7 +143,8 @@ export function DrawTab({ events, tournaments, apiRequest, onRefresh, showMsg }:
     try {
       await apiRequest('/draws/generate-group-knockout', 'POST', { eventId, groupCount: Number(groupCount) });
       showMsg('Chaveamento gerado com sucesso!');
-      onRefresh();
+      // Não chamar onRefresh() aqui — desmontaria o DrawTab e resetaria eventId,
+      // causando o bug de gerar com duplas do evento errado na segunda tentativa.
       await loadBracket(eventId);
     } catch (err: any) {
       showMsg(err.message, 'err');
@@ -159,7 +160,6 @@ export function DrawTab({ events, tournaments, apiRequest, onRefresh, showMsg }:
     try {
       await apiRequest('/draws/generate-group-knockout', 'POST', { eventId, groupCount: Number(groupCount) });
       showMsg('Estrutura criada! Agora atribua as duplas às partidas.');
-      onRefresh();
       await loadBracket(eventId);
       await loadManualData(eventId);
     } catch (err: any) {
