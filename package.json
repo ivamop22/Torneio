@@ -4,7 +4,7 @@
   "packageManager": "pnpm@10.33.3",
   "scripts": {
     "start": "node server.js",
-    "build": "corepack pnpm --filter @beach-tennis/db generate && corepack pnpm --filter web build",
+    "build": "pnpm --filter web build",
     "dev": "corepack pnpm -r --parallel --filter api --filter web dev",
     "build:all": "corepack pnpm --filter @beach-tennis/db generate && corepack pnpm -r --filter api --filter web build",
     "build:web": "corepack pnpm --filter web build",
